@@ -1,6 +1,7 @@
 #include "ciastkarnia.h"
 
 static DaneWspolne *dane = NULL;
+static int sem_id = -1;
 
 int main(){
     srand(time(NULL));
@@ -28,6 +29,19 @@ int main(){
 
     printf("[KLIENT %d] Polaczona z pamiecia dzielona\n", klientID);
     sleep(1);
+
+    key_t klucz_sem = ftok(SCIEZKA_KLUCZA, PROJ_ID_SEM);
+    if(klucz_sem == -1){
+        perror("[KLIENT] Blad ftok dla semafora");
+        exit(1);
+    }
+    sem_id = semget(klucz_sem, 1,0600);
+    if(sem_id == -1){
+        perror("[KLIENT] Blad semget");
+        exit(1);
+    }
+
+    printf("[KLIENT %d] Polaczono z semaforem\n", klientID);
 
     int ileProduktow = losowanie(2,4);
     int listaZakupow[LICZBA_RODZAJOW];
@@ -64,11 +78,14 @@ int main(){
     for (int i = 0; i< LICZBA_RODZAJOW; i++){
         if(listaZakupow[i] == 0)continue;
 
+        semafor_zablokuj(sem_id);
+
         int chce = listaZakupow[i];
         int dostepne = dane->podajnik[i];
 
         if(dostepne == 0){
             printf("[KLIENT %d] Brak %s na podajniku\n", klientID, NAZWA_PRODUKTOW[i]);
+            semafor_odblokuj(sem_id);
             continue;
         }
 
@@ -80,6 +97,8 @@ int main(){
 
          printf("[KLIENT %d] Biore %d szt. %s (zostalo: %d)\n", 
                klientID, biore, NAZWA_PRODUKTOW[i], dane->podajnik[i]);
+
+        semafor_odblokuj(sem_id);
 
         usleep(200000); 
     }

@@ -5,6 +5,7 @@
 
 static int shm_id = -1;
 static DaneWspolne *dane = NULL;
+static int sem_id = -1;
 
 
 void sprzatanie(int sig) {
@@ -33,6 +34,13 @@ void sprzatanie(int sig) {
             perror("blad shmctl");
         }
         printf("[KIEROWNIK] Usunieto pamiec dzielona\n");
+    }
+
+    if(sem_id >= 0){
+        if(semctl(sem_id,0, IPC_RMID) == -1){
+            perror("Blad semctl IPC_RMID");
+        }
+        printf("[KIEROWNIK] Usunieto semafor\n");
     }
     
     printf("[KIEROWNIK] Sklep zamknięty. Do widzenia.\n");
@@ -71,6 +79,28 @@ int main(){
     dane->sklep_otwarty = 1;
     dane->piekarnia_otwarta = 1;
     printf("[Kierownik] Pamiec dzielona gotowa\n");
+
+    key_t klucz_sem = ftok(SCIEZKA_KLUCZA, PROJ_ID_SEM);
+    if (klucz_sem == -1){
+        perror("[KIEROWNIK] Blad ftok semafor");
+        exit(1);
+    }
+
+    printf("[KIEROWNIK] Klucz semafora: %d\n", klucz_sem);
+
+    sem_id = semget(klucz_sem, 1, IPC_CREAT | 0600);
+    if(sem_id == -1){
+        perror("[KIEROWNIK] Blad semget");
+        exit(1);
+    }
+    printf("[KIEROWNIK] Semafor ID: %d\n", sem_id);
+
+    if(semctl(sem_id, 0, SETVAL,1) == -1){
+        perror("[KIEROWNIK] Blad semctl");
+        exit(1);
+    }
+    printf("[KIEROWNIK] Semafor ustawiony na 1 (odblokowany)\n");
+
 
     pid_t piekarz = fork();
     if (piekarz == 0){
