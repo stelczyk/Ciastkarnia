@@ -10,6 +10,7 @@
 #include <sys/shm.h>
 #include <errno.h>
 #include <sys/sem.h>
+#include <sys/msg.h>
 
 #define LICZBA_RODZAJOW 12
 #define MAX_KLIENTOW 8
@@ -18,6 +19,7 @@
 #define SCIEZKA_KLUCZA "/tmp"
 #define PROJ_ID_SHM 'S'
 #define PROJ_ID_SEM 'E'
+#define PROJ_ID_MSG 'M'
 
 struct sembuf;
 
@@ -30,11 +32,22 @@ static const char *NAZWA_PRODUKTOW[] = {
 static const int CENY[] = {3, 15, 12, 4, 6, 5, 8, 7, 3, 5, 4, 10};
 
 typedef struct {
-    int podajnik[LICZBA_RODZAJOW]; // Sztuki na podajniku
+    int wyprodukowano[LICZBA_RODZAJOW];
+    int sprzedano[LICZBA_RODZAJOW];
+
+    int klienci_w_sklepie;
     int sklep_otwarty; // 1 = otwarty, 0 = zamkniety
     int piekarnia_otwarta;
+
+    int inwentaryzacja;
+    int ewakuacja;
+    
 } DaneWspolne;
 
+typedef struct {
+    long mtype;
+    int numer_sztuki;
+} MsgProdukt;
 
 
 static int losowanie(int min, int max) {

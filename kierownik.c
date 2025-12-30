@@ -6,6 +6,7 @@
 static int shm_id = -1;
 static DaneWspolne *dane = NULL;
 static int sem_id = -1;
+static int msg_id = -1;
 
 
 void sprzatanie(int sig) {
@@ -34,6 +35,13 @@ void sprzatanie(int sig) {
             perror("blad shmctl");
         }
         printf("[KIEROWNIK] Usunieto pamiec dzielona\n");
+    }
+
+    if(msg_id >= 0){
+        if(msgctl(msg_id, IPC_RMID, NULL) == -1){
+            perror("[KIEROWNIK] Blad msgctl IPC_RMID");
+        }
+        printf("[KIEROWNIK] Usunieto kolejke komunikatow\n");
     }
 
     if(sem_id >= 0){
@@ -100,6 +108,20 @@ int main(){
         exit(1);
     }
     printf("[KIEROWNIK] Semafor ustawiony na 1 (odblokowany)\n");
+
+    key_t klucz_msg = ftok(SCIEZKA_KLUCZA, PROJ_ID_MSG);
+    if (klucz_msg == -1){
+        perror("[KIEROWNIK] Blad ftok dla kolejki");
+        exit(1);
+    }
+    printf("[KIEROWNIK] Klucz kolejki: %d\n", klucz_msg);
+
+    msg_id = msgget(klucz_msg, IPC_CREAT | 0600);
+    if(msg_id == -1){
+        perror("[KIEROWNIK] Blad msgget");
+        exit(1);
+    }
+    printf("[KIEROWNIK] Kolejka komunikatow ID: %d\n", msg_id);
 
 
     pid_t piekarz = fork();

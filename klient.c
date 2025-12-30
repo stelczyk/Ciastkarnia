@@ -2,6 +2,7 @@
 
 static DaneWspolne *dane = NULL;
 static int sem_id = -1;
+static int msg_id = -1;
 
 int main(){
     srand(time(NULL));
@@ -43,6 +44,19 @@ int main(){
 
     printf("[KLIENT %d] Polaczono z semaforem\n", klientID);
 
+     key_t klucz_msg = ftok(SCIEZKA_KLUCZA, PROJ_ID_MSG);
+    if(klucz_msg == -1){
+        perror("[KLIENT] Blad ftok dla kolejki");
+        exit(1);
+    }
+
+    msg_id = msgget(klucz_msg, 0600);
+    if(msg_id == -1){
+        perror("[KLIENT] Blad msgget");
+        exit(1);
+    }
+    printf("[KLIENT %d] Polaczono z kolejka komunikatow\n", klientID);
+
     int ileProduktow = losowanie(2,4);
     int listaZakupow[LICZBA_RODZAJOW];
 
@@ -73,34 +87,51 @@ int main(){
         koszyk[i] = 0;
     }
 
-    printf("[KLIENT %d] Robie zakupy\n", klientID);
+    printf("[KLIENT %d] Robie zakupy...\n", klientID);
 
-    for (int i = 0; i< LICZBA_RODZAJOW; i++){
-        if(listaZakupow[i] == 0)continue;
-
-        semafor_zablokuj(sem_id);
+    for(int i = 0; i < LICZBA_RODZAJOW; i++){
+        if(listaZakupow[i] == 0) continue;
 
         int chce = listaZakupow[i];
-        int dostepne = dane->podajnik[i];
+        int wzialem = 0;
 
-        if(dostepne == 0){
-            printf("[KLIENT %d] Brak %s na podajniku\n", klientID, NAZWA_PRODUKTOW[i]);
+        
+        for(int j = 0; j < chce; j++){
+            MsgProdukt produkt;
+            
+            
+            ssize_t wynik = msgrcv(msg_id, &produkt, 
+                                   sizeof(produkt) - sizeof(long), 
+                                   i + 1,        
+                                   IPC_NOWAIT);  
+            
+            if(wynik == -1){
+                
+                break;
+            }
+            
+            
+            wzialem++;
+            koszyk[i]++;
+            suma += CENY[i];
+
+            semafor_zablokuj(sem_id);
+            dane->sprzedano[i]++;
             semafor_odblokuj(sem_id);
-            continue;
+            
+            printf("[KLIENT %d] Wzialem %s #%d\n", 
+                   klientID, NAZWA_PRODUKTOW[i], produkt.numer_sztuki);
         }
 
-        int biore = (chce < dostepne) ? chce : dostepne;
+        if(wzialem == 0){
+            printf("[KLIENT %d] Brak %s na podajniku!\n", 
+                   klientID, NAZWA_PRODUKTOW[i]);
+        } else if(wzialem < chce){
+            printf("[KLIENT %d] Wzialem tylko %d/%d szt. %s\n", 
+                   klientID, wzialem, chce, NAZWA_PRODUKTOW[i]);
+        }
 
-        dane->podajnik[i] -= biore;
-        koszyk[i] = biore;
-        suma += biore * CENY[i];
-
-         printf("[KLIENT %d] Biore %d szt. %s (zostalo: %d)\n", 
-               klientID, biore, NAZWA_PRODUKTOW[i], dane->podajnik[i]);
-
-        semafor_odblokuj(sem_id);
-
-        usleep(200000); 
+        usleep(100000);  
     }
 
 
