@@ -30,7 +30,7 @@ int main(){
         exit(1);
     }
 
-    printf("[PIEKARZ %d] Polaczylem sie z pamiecia dzielona\n", piekarzID);
+    //printf("[PIEKARZ %d] Polaczylem sie z pamiecia dzielona\n", piekarzID);
 
     key_t klucz_sem = ftok(SCIEZKA_KLUCZA, PROJ_ID_SEM);
     if(klucz_sem == -1){
@@ -44,7 +44,7 @@ int main(){
         exit(1);
     }
 
-    printf("[Piekarz] Polaczono z semaforem\n");
+    //printf("[Piekarz] Polaczono z semaforem\n");
 
     key_t klucz_msg = ftok(SCIEZKA_KLUCZA, PROJ_ID_MSG);
     if (klucz_msg == -1){
@@ -57,7 +57,7 @@ int main(){
         perror("[PIEKARz] Blad msgget");
         exit(1);
     }
-    printf("[PIEKARZ %d] Polaczylem sie z kolejka komunikatow\n");
+    //printf("[PIEKARZ %d] Polaczylem sie z kolejka komunikatow\n");
 
     while(dane->piekarnia_otwarta){
         int indeks = losowanie(0,LICZBA_RODZAJOW - 1);

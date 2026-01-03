@@ -15,11 +15,12 @@
 #define LICZBA_RODZAJOW 12
 #define MAX_KLIENTOW 8
 #define MAX_POJEMNOSC 20
-#define PROG_DRUGIEJ KASY 4 
+#define PROG_DRUGIEJ_KASY 4 
 #define SCIEZKA_KLUCZA "/tmp"
 #define PROJ_ID_SHM 'S'
 #define PROJ_ID_SEM 'E'
 #define PROJ_ID_MSG 'M'
+#define PROJ_ID_SEM_WEJSCIE 'W'
 
 struct sembuf;
 
@@ -78,6 +79,14 @@ static inline int semafor_odblokuj(int sem_id){
         return -1;
     }
     return 0;
+}
+
+static inline int semafor_wartosc(int sem_id){
+    int val = semctl(sem_id,0,GETVAL);
+    if(val == -1){
+        perror("Blad semctl do porbania wartosci semafora");
+    }
+    return val;
 }
 
 

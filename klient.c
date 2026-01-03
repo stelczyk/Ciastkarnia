@@ -3,13 +3,13 @@
 static DaneWspolne *dane = NULL;
 static int sem_id = -1;
 static int msg_id = -1;
+static int sem_wejscie_id = -1;
 
 int main(){
     srand(time(NULL));
     pid_t klientID = getpid();
 
-    printf("[KLIENT %d] Wchodze do ciastkarni\n", klientID);
-
+    
     key_t klucz = ftok(SCIEZKA_KLUCZA, PROJ_ID_SHM);
     if(klucz == -1){
         perror("[KLIENT] Blad ftok");
@@ -23,28 +23,26 @@ int main(){
     }
 
     dane = (DaneWspolne *)shmat(shm_id, NULL, 0);
-    if (dane == (void*)-1){
+    if(dane == (void*)-1){
         perror("[KLIENT] Blad shmat");
         exit(1);
     }
 
-    printf("[KLIENT %d] Polaczona z pamiecia dzielona\n", klientID);
-    sleep(1);
-
+    
     key_t klucz_sem = ftok(SCIEZKA_KLUCZA, PROJ_ID_SEM);
     if(klucz_sem == -1){
         perror("[KLIENT] Blad ftok dla semafora");
         exit(1);
     }
-    sem_id = semget(klucz_sem, 1,0600);
+
+    sem_id = semget(klucz_sem, 1, 0600);
     if(sem_id == -1){
         perror("[KLIENT] Blad semget");
         exit(1);
     }
 
-    printf("[KLIENT %d] Polaczono z semaforem\n", klientID);
-
-     key_t klucz_msg = ftok(SCIEZKA_KLUCZA, PROJ_ID_MSG);
+    
+    key_t klucz_msg = ftok(SCIEZKA_KLUCZA, PROJ_ID_MSG);
     if(klucz_msg == -1){
         perror("[KLIENT] Blad ftok dla kolejki");
         exit(1);
@@ -55,9 +53,40 @@ int main(){
         perror("[KLIENT] Blad msgget");
         exit(1);
     }
-    printf("[KLIENT %d] Polaczono z kolejka komunikatow\n", klientID);
 
-    int ileProduktow = losowanie(2,4);
+   
+    key_t klucz_sem_wejscie = ftok(SCIEZKA_KLUCZA, PROJ_ID_SEM_WEJSCIE);
+    if(klucz_sem_wejscie == -1){
+        perror("[KLIENT] Blad ftok dla semafora wejscia");
+        exit(1);
+    }
+
+    sem_wejscie_id = semget(klucz_sem_wejscie, 1, 0600);
+    if(sem_wejscie_id == -1){
+        perror("[KLIENT] Blad semget dla semafora wejscia");
+        exit(1);
+    }
+
+    
+    int wolne_miejsca = semafor_wartosc(sem_wejscie_id);
+    if(wolne_miejsca <= 0){
+        printf("[KLIENT %d] Sklep pelny, czekam przed sklepem...\n", klientID);
+    }
+
+    semafor_zablokuj(sem_wejscie_id);
+
+    semafor_zablokuj(sem_id);
+    dane->klienci_w_sklepie++;
+    int ilu_w_sklepie = dane->klienci_w_sklepie;
+    semafor_odblokuj(sem_id);
+
+    printf("[KLIENT %d] Wchodze do sklepu (klientow: %d/%d)\n", 
+           klientID, ilu_w_sklepie, MAX_KLIENTOW);
+
+    sleep(3);
+
+    
+    int ileProduktow = losowanie(2, 4);
     int listaZakupow[LICZBA_RODZAJOW];
 
     for(int i = 0; i < LICZBA_RODZAJOW; i++){
@@ -66,20 +95,21 @@ int main(){
 
     int wybrano = 0;
     while(wybrano < ileProduktow){
-        int indeks = losowanie(0, LICZBA_RODZAJOW-1);
+        int indeks = losowanie(0, LICZBA_RODZAJOW - 1);
         if(listaZakupow[indeks] == 0){
-            listaZakupow[indeks] = losowanie(1,3);
+            listaZakupow[indeks] = losowanie(1, 3);
             wybrano++;
-        } 
+        }
     }
 
-    printf("[KLIENT %d] Chce kupic: \n", klientID);
-    for(int i = 0; i<LICZBA_RODZAJOW;i++){
+    printf("[KLIENT %d] Chce kupic:\n", klientID);
+    for(int i = 0; i < LICZBA_RODZAJOW; i++){
         if(listaZakupow[i] > 0){
             printf("  - %s: %d szt.\n", NAZWA_PRODUKTOW[i], listaZakupow[i]);
         }
     }
 
+  
     int koszyk[LICZBA_RODZAJOW];
     int suma = 0;
 
@@ -87,7 +117,7 @@ int main(){
         koszyk[i] = 0;
     }
 
-    printf("[KLIENT %d] Robie zakupy...\n", klientID);
+    printf("[KLIENT %d] Robie zakupy\n", klientID);
 
     for(int i = 0; i < LICZBA_RODZAJOW; i++){
         if(listaZakupow[i] == 0) continue;
@@ -95,22 +125,14 @@ int main(){
         int chce = listaZakupow[i];
         int wzialem = 0;
 
-        
         for(int j = 0; j < chce; j++){
             MsgProdukt produkt;
-            
-            
-            ssize_t wynik = msgrcv(msg_id, &produkt, 
-                                   sizeof(produkt) - sizeof(long), 
-                                   i + 1,        
-                                   IPC_NOWAIT);  
-            
+
+            ssize_t wynik = msgrcv(msg_id, &produkt, sizeof(produkt) - sizeof(long), i + 1, IPC_NOWAIT);
             if(wynik == -1){
-                
                 break;
             }
-            
-            
+
             wzialem++;
             koszyk[i]++;
             suma += CENY[i];
@@ -118,7 +140,7 @@ int main(){
             semafor_zablokuj(sem_id);
             dane->sprzedano[i]++;
             semafor_odblokuj(sem_id);
-            
+
             printf("[KLIENT %d] Wzialem %s #%d\n", 
                    klientID, NAZWA_PRODUKTOW[i], produkt.numer_sztuki);
         }
@@ -131,15 +153,13 @@ int main(){
                    klientID, wzialem, chce, NAZWA_PRODUKTOW[i]);
         }
 
-        usleep(100000);  
+        usleep(100000);
     }
 
-
-    sleep(1);
-
+    
     printf("\n[KLIENT %d] === RACHUNEK ===\n", klientID);
     int kupiono = 0;
-    for(int i = 0;i < LICZBA_RODZAJOW; i++){
+    for(int i = 0; i < LICZBA_RODZAJOW; i++){
         if(koszyk[i] > 0){
             int wartosc = koszyk[i] * CENY[i];
             printf("  %s: %d szt. x %d zl = %d zl\n", 
@@ -150,9 +170,17 @@ int main(){
     printf("  -------------------------\n");
     printf("  SUMA: %d zl za %d produktow\n", suma, kupiono);
     printf("[KLIENT %d] =================\n\n", klientID);
-    
-    shmdt(dane);
-    printf("[KLIENT %d] Wychodzę\n", klientID);
 
+    
+    semafor_zablokuj(sem_id);
+    dane->klienci_w_sklepie--;
+    int zostalo = dane->klienci_w_sklepie;
+    semafor_odblokuj(sem_id);
+
+    semafor_odblokuj(sem_wejscie_id);
+
+    printf("[KLIENT %d] Wychodzę (zostalo klientow: %d)\n", klientID, zostalo);
+
+    shmdt(dane);
     return 0;
 }
