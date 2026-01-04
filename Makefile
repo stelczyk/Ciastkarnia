@@ -12,8 +12,12 @@ piekarz: piekarz.c ciastkarnia.h
 klient: klient.c ciastkarnia.h
 	$(CC) $(CFLAGS) -o klient klient.c
 
+kasjer: kasjer.c ciastkarnia.h
+	$(CC) $(CFLAGS) -o kasjer kasjer.c
+
+
 clean:
-	rm -f kierownik piekarz klient
+	rm -f kierownik piekarz klient kasjer
 
 run: all
 	./kierownik

@@ -8,6 +8,8 @@ static DaneWspolne *dane = NULL;
 static int sem_id = -1;
 static int msg_id = -1;
 static int sem_wejscie_id = -1;
+static int msg_kasa_id = -1;
+
 
 
 void sprzatanie(int sig) {
@@ -43,6 +45,13 @@ void sprzatanie(int sig) {
             perror("[KIEROWNIK] Blad msgctl IPC_RMID");
         }
         printf("[KIEROWNIK] Usunieto kolejke komunikatow\n");
+    }
+
+    if(msg_kasa_id >= 0){
+        if(msgctl(msg_kasa_id, IPC_RMID, NULL) == -1){
+            perror("[KIEROWNIK] Blad msgctl IPC_RMID dla kas");
+        }
+        printf("[KIEROWNIK] Usunieto kolejke kas\n");
     }
 
     if(sem_id >= 0){
@@ -148,6 +157,16 @@ int main(){
         exit(1);
     }
 
+    key_t klucz_msg_kasa = ftok(SCIEZKA_KLUCZA,PROJ_ID_MSG_KASA);
+        if(klucz_msg_kasa == -1){
+            perror("[KIEROWNIK] Blad ftok dla kolejki kas");
+            exit(1);
+    }
+
+    msg_kasa_id = msgget(klucz_msg_kasa, IPC_CREAT | 0600);
+    if(msg_kasa_id == -1){
+        perror("[KIEROWNIK] Blad msgget dla kas");
+    }
 
     pid_t piekarz = fork();
     if (piekarz == 0){

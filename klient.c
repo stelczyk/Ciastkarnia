@@ -4,6 +4,7 @@ static DaneWspolne *dane = NULL;
 static int sem_id = -1;
 static int msg_id = -1;
 static int sem_wejscie_id = -1;
+static int msg_kasa_id = -1; 
 
 int main(){
     srand(time(NULL));
@@ -67,6 +68,18 @@ int main(){
         exit(1);
     }
 
+    key_t klucz_msg_kasa = ftok(SCIEZKA_KLUCZA, PROJ_ID_MSG_KASA);
+    if(klucz_msg_kasa == -1){
+        perror("[KLIENT] Blad ftok dla kolejki kas");
+        exit(1);
+    }
+
+    msg_kasa_id = msgget(klucz_msg_kasa, 0600);
+    if(msg_kasa_id == -1){
+        perror("[KLIENT] Blad mssget dla kas");
+        exit(1);
+    }
+
     
     int wolne_miejsca = semafor_wartosc(sem_wejscie_id);
     if(wolne_miejsca <= 0){
@@ -80,8 +93,8 @@ int main(){
     int ilu_w_sklepie = dane->klienci_w_sklepie;
     semafor_odblokuj(sem_id);
 
-    printf("[KLIENT %d] Wchodze do sklepu (klientow: %d/%d)\n", 
-           klientID, ilu_w_sklepie, MAX_KLIENTOW);
+    printf("[KLIENT %d] Wchodze do sklepu (klientow: %d/%d)\n", klientID, ilu_w_sklepie, MAX_KLIENTOW);
+           
 
     sleep(3);
 
@@ -141,36 +154,40 @@ int main(){
             dane->sprzedano[i]++;
             semafor_odblokuj(sem_id);
 
-            printf("[KLIENT %d] Wzialem %s #%d\n", 
-                   klientID, NAZWA_PRODUKTOW[i], produkt.numer_sztuki);
+            printf("[KLIENT %d] Wzialem %s #%d\n", klientID, NAZWA_PRODUKTOW[i], produkt.numer_sztuki);
+                   
         }
 
         if(wzialem == 0){
-            printf("[KLIENT %d] Brak %s na podajniku!\n", 
-                   klientID, NAZWA_PRODUKTOW[i]);
+            printf("[KLIENT %d] Brak %s na podajniku!\n", klientID, NAZWA_PRODUKTOW[i]);
+                   
         } else if(wzialem < chce){
-            printf("[KLIENT %d] Wzialem tylko %d/%d szt. %s\n", 
-                   klientID, wzialem, chce, NAZWA_PRODUKTOW[i]);
+            printf("[KLIENT %d] Wzialem tylko %d/%d szt. %s\n", klientID, wzialem, chce, NAZWA_PRODUKTOW[i]);
+                   
         }
 
         usleep(100000);
     }
 
     
-    printf("\n[KLIENT %d] === RACHUNEK ===\n", klientID);
-    int kupiono = 0;
-    for(int i = 0; i < LICZBA_RODZAJOW; i++){
-        if(koszyk[i] > 0){
-            int wartosc = koszyk[i] * CENY[i];
-            printf("  %s: %d szt. x %d zl = %d zl\n", 
-                   NAZWA_PRODUKTOW[i], koszyk[i], CENY[i], wartosc);
-            kupiono += koszyk[i];
-        }
+    if(suma > 0){
+    MsgKoszyk wiadomosc;
+    wiadomosc.mtype = 1;
+    wiadomosc.klient_pid = klientID;
+    wiadomosc.suma = suma;
+    for(int i = 0;i < LICZBA_RODZAJOW; i++){
+        wiadomosc.koszyk[i] = koszyk[i];
     }
-    printf("  -------------------------\n");
-    printf("  SUMA: %d zl za %d produktow\n", suma, kupiono);
-    printf("[KLIENT %d] =================\n\n", klientID);
 
+    printf("[KLIENT %d] Ide do kasy 1\n", klientID);
+
+    if(msgsnd(msg_kasa_id, &wiadomosc, sizeof(wiadomosc) - sizeof(long),0) == -1){
+        perror("[KLIENT] Blad msgsnd dla kasy");
+    }
+    sleep(1);
+    }else{
+        printf("[KLIENT %d] Nic nie kupilem, wychodze\n", klientID);
+    }
     
     semafor_zablokuj(sem_id);
     dane->klienci_w_sklepie--;

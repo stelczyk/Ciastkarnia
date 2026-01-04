@@ -20,6 +20,7 @@
 #define PROJ_ID_SHM 'S'
 #define PROJ_ID_SEM 'E'
 #define PROJ_ID_MSG 'M'
+#define PROJ_ID_MSG_KASA 'K'
 #define PROJ_ID_SEM_WEJSCIE 'W'
 
 struct sembuf;
@@ -50,6 +51,12 @@ typedef struct {
     int numer_sztuki;
 } MsgProdukt;
 
+typedef struct {
+    long mtype;
+    pid_t klient_pid;
+    int koszyk[LICZBA_RODZAJOW];
+    int suma;
+} MsgKoszyk;
 
 static int losowanie(int min, int max) {
     return min + (rand() % (max - min + 1));
