@@ -165,6 +165,7 @@ int main(){
 
             semafor_zablokuj(sem_id);
             dane->sprzedano[i]++;
+            dane->na_podajniku[i]--;
             semafor_odblokuj(sem_id);
 
             printf("[KLIENT %d] Wzialem %s #%d\n", klientID, NAZWA_PRODUKTOW[i], produkt.numer_sztuki);

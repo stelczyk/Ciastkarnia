@@ -71,6 +71,20 @@ int main(){
         fflush(stdout);
 
         for (int i = 0; i<ilosc; i++){
+
+            semafor_zablokuj(sem_id);
+            int aktualnie = dane->na_podajniku[indeks];
+            int limit = POJEMNOSC_PODAJNIKA[indeks];
+
+            if(aktualnie >= limit){
+                semafor_odblokuj(sem_id);
+                printf("[PIEKARZ %d] Podajnik %s pelny (%d/%d). STOP\n", piekarzID, NAZWA_PRODUKTOW[indeks], aktualnie,limit);
+                fflush(stdout);
+                break;
+            }
+            semafor_odblokuj(sem_id);
+
+
             licznik_produktow++;
             MsgProdukt produkt;
             produkt.mtype = indeks +1;
@@ -81,8 +95,10 @@ int main(){
             }else {
                 semafor_zablokuj(sem_id);
                 dane->wyprodukowano[indeks]++;
+                dane->na_podajniku[indeks]++;
+                int ile_teraz = dane->na_podajniku[indeks];
                 semafor_odblokuj(sem_id);
-                printf("[PIEKARZ %d] Wyslalem %s # %d na podajnik\n", piekarzID, NAZWA_PRODUKTOW[indeks], licznik_produktow);
+                printf("[PIEKARZ %d] Wyslalem %s # %d na podajnik (%d/%d)\n", piekarzID, NAZWA_PRODUKTOW[indeks], licznik_produktow, ile_teraz, POJEMNOSC_PODAJNIKA[indeks]);
                 fflush(stdout);
             }
         }

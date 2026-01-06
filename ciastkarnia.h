@@ -33,9 +33,12 @@ static const char *NAZWA_PRODUKTOW[] = {
 
 static const int CENY[] = {3, 15, 12, 4, 6, 5, 8, 7, 3, 5, 4, 10};
 
+static const int POJEMNOSC_PODAJNIKA[] = {10, 8, 8, 12, 10, 15, 6, 8, 20, 15, 12, 5};
+
 typedef struct {
     int wyprodukowano[LICZBA_RODZAJOW];
     int sprzedano[LICZBA_RODZAJOW];
+    int na_podajniku[LICZBA_RODZAJOW];
 
     int klienci_w_sklepie;
     int sklep_otwarty; // 1 = otwarty, 0 = zamkniety
