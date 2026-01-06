@@ -104,7 +104,17 @@ int main(){
     semafor_odblokuj(sem_id);
 
     //printf("[KLIENT %d] Wchodze do sklepu (klientow: %d/%d)\n", klientID, ilu_w_sklepie, MAX_KLIENTOW);
-           
+    if(!dane->sklep_otwarty){
+        printf("[KLIENT %d] Sklep zamkniety! Wychodzę.\n", klientID);
+        fflush(stdout);
+        
+        semafor_zablokuj(sem_id);
+        dane->klienci_w_sklepie--;
+        semafor_odblokuj(sem_id);
+        semafor_odblokuj(sem_wejscie_id);
+        shmdt(dane);
+        exit(0);
+    }       
 
     sleep(3);
 

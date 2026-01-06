@@ -213,13 +213,47 @@ int main(){
     printf("[KIEROWNIK] Zatrudnilem kasjera 2 PID: %d\n", kasjer2);
     fflush(stdout);
 
+    printf("[KIEROWNIK] Piekarnia otwarta! Sklep otworzy sie za %d sekund\n", CZAS_PRZED_OTWARCIEM_SKLEPU);
+    fflush(stdout);
+
+    sleep(CZAS_PRZED_OTWARCIEM_SKLEPU);
+    
+    printf("[KIEROWNIK] Sklep otwarty!\n");
+    fflush(stdout);
+
+    time_t czas_startu = time(NULL);
+    time_t czas_konca = czas_startu + CZAS_PRACY_SKLEPU;
+
     while(1){
+        time_t teraz = time(NULL);
+        int pozostalo = (int)(czas_konca - teraz);
+
+
+        if(teraz >= czas_konca){
+            printf("\n[KIEROWNIK] Czas pracy minal! Zamykam sklep.\n");
+            fflush(stdout);
+
+            dane->sklep_otwarty = 0;
+            dane->piekarnia_otwarta = 0;
+            dane->inwentaryzacja = 1;
+
+            sleep(3); 
+            
+            printf("[KIEROWNIK] Generuje raport...\n"); //TODO
+            fflush(stdout);
+            
+            sprzatanie(0);
+        }
+
         sleep(1);
-        pid_t klient = fork();
-        if(klient == 0){
-            execl("./klient", "klient", NULL);
-            perror("Nie udalo sie uruchomic klienta");
-            exit(1);
+
+        if(dane->sklep_otwarty){
+            pid_t klient = fork();
+            if(klient == 0){
+                execl("./klient", "klient", NULL);
+                perror("Nie udalo sie uruchomic klienta");
+                exit(1);
+        }
         }
     }
     return 0;

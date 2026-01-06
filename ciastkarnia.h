@@ -16,6 +16,9 @@
 #define MAX_KLIENTOW 6
 #define MAX_POJEMNOSC 20
 #define PROG_DRUGIEJ_KASY 3
+#define CZAS_PRZED_OTWARCIEM_SKLEPU 5
+#define CZAS_PRACY_SKLEPU 60
+
 #define SCIEZKA_KLUCZA "/tmp"
 #define PROJ_ID_SHM 'S'
 #define PROJ_ID_SEM 'E'
