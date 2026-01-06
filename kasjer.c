@@ -11,7 +11,7 @@ int main(int argc, char* argv[]){
     }
 
     pid_t kasjerID = getpid();
-    printf("[KASJER %d] Kasa %d otwarta\n", kasjerID, numer_kasy);
+    
 
     key_t klucz = ftok(SCIEZKA_KLUCZA, PROJ_ID_SHM);
     if(klucz == -1){
@@ -54,8 +54,38 @@ int main(int argc, char* argv[]){
         perror("[KASJER] Blad msgget kasa");
         exit(1);
     }
+    if(dane->kasa_otwarta[numer_kasy - 1]){
+        printf("[KASJER %d] Kasa %d otwarta\n", kasjerID, numer_kasy);
+    } else {
+        printf("[KASJER %d] Kasa %d gotowa (czeka na otwarcie)\n", kasjerID, numer_kasy);
+    }
+    fflush(stdout);
+    int poprzedni_status = dane->kasa_otwarta[numer_kasy - 1];
 
     while(dane->sklep_otwarty){
+
+        int moja_kasa_index = numer_kasy - 1;
+
+        int aktualny_status = dane->kasa_otwarta[moja_kasa_index];
+        if(aktualny_status != poprzedni_status){
+            if(aktualny_status){
+                printf("[KASJER %d] Kasa %d, otwieram\n", kasjerID, numer_kasy);
+                
+            }else{
+                printf("[KASJER %d] Kasa %d, zamykam, obsluguje reszte kolejki: %d\n", kasjerID, numer_kasy, dane->kasa_kolejka[moja_kasa_index]);  
+            }
+            fflush(stdout);
+            poprzedni_status = aktualny_status;
+        }    
+
+
+        if(!dane->kasa_otwarta[moja_kasa_index]){
+            if(dane->kasa_kolejka[moja_kasa_index] <= 0){
+                usleep(200000);
+                continue;
+            }
+
+        }
         MsgKoszyk koszyk;
 
         ssize_t wynik = msgrcv(msg_kasa_id, &koszyk, sizeof(koszyk) - sizeof(long), numer_kasy, IPC_NOWAIT);
@@ -63,7 +93,16 @@ int main(int argc, char* argv[]){
             usleep(100000);
             continue;
         }
+
+        semafor_zablokuj(sem_id);
+        if(dane->kasa_kolejka[moja_kasa_index] > 0){
+            dane->kasa_kolejka[moja_kasa_index]--;
+        }
+        dane->kasa_obsluzonych[moja_kasa_index]++;
+        semafor_odblokuj(sem_id);
+
         printf("[KASJER %d] Kasa %d,  Obsluguje klienta %d\n", kasjerID, numer_kasy, koszyk.klient_pid);
+        fflush(stdout);
         int pozycji = 0;
         for(int i = 0;i<LICZBA_RODZAJOW; i++){
             if(koszyk.koszyk[i] > 0){
@@ -73,8 +112,8 @@ int main(int argc, char* argv[]){
             }
         }
 
-        printf("  SUMA: %d zl (%d szt.)\n", koszyk.suma, pozycji);
-        printf("  Dziekujemy za zakupy!\n");
+        printf("  SUMA: %d zl (%d szt.) - Dziekujemy\n\n", koszyk.suma, pozycji);
+        fflush(stdout);
 
         usleep(500000);
     }

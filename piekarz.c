@@ -1,5 +1,7 @@
 #include "ciastkarnia.h"
 
+
+
 static int sem_id = -1;
 static DaneWspolne *dane = NULL;
 static int msg_id = -1;
@@ -11,6 +13,7 @@ int main(){
     pid_t piekarzID = getpid();
 
     printf("[PIEKARZ %d] Rozpoczynam prace\n", piekarzID);
+    fflush(stdout);
 
     key_t klucz = ftok(SCIEZKA_KLUCZA, PROJ_ID_SHM);
     if(klucz == -1){
@@ -65,6 +68,7 @@ int main(){
         int ilosc = losowanie(2,10);
 
         printf("[PIEKARZ %d] Pieke %s (%d sztuk)\n", piekarzID, NAZWA_PRODUKTOW[indeks], ilosc);
+        fflush(stdout);
 
         for (int i = 0; i<ilosc; i++){
             licznik_produktow++;
@@ -79,12 +83,14 @@ int main(){
                 dane->wyprodukowano[indeks]++;
                 semafor_odblokuj(sem_id);
                 printf("[PIEKARZ %d] Wyslalem %s # %d na podajnik\n", piekarzID, NAZWA_PRODUKTOW[indeks], licznik_produktow);
+                fflush(stdout);
             }
         }
         sleep(1);
     }
 
     printf("[PIEKARZ %d] Piekarnia zamknieta, koncze prace\n", piekarzID);
+    fflush(stdout);
     shmdt(dane);
     return 0;
 }

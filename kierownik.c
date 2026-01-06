@@ -14,12 +14,14 @@ static int msg_kasa_id = -1;
 
 void sprzatanie(int sig) {
     printf("\n\n[KIEROWNIK] Otrzymano sygnał zakończenia\n");
+    fflush(stdout);
 
     if(dane != NULL){
         dane->sklep_otwarty = 0;
         dane->piekarnia_otwarta = 0;
     }
     printf("[KIEROWNIK] Zamykam sklep i zwalniam pracowników...\n");
+    fflush(stdout);
     
     signal(SIGTERM, SIG_IGN);
     kill(0, SIGTERM);
@@ -31,6 +33,7 @@ void sprzatanie(int sig) {
             perror("blad shmdt");
         }
         printf("[KIEROWNIK] Odlaczono pamiec dzielona\n");
+        fflush(stdout);
     }
 
     if(shm_id >= 0){
@@ -38,6 +41,7 @@ void sprzatanie(int sig) {
             perror("blad shmctl");
         }
         printf("[KIEROWNIK] Usunieto pamiec dzielona\n");
+        fflush(stdout);
     }
 
     if(msg_id >= 0){
@@ -45,6 +49,7 @@ void sprzatanie(int sig) {
             perror("[KIEROWNIK] Blad msgctl IPC_RMID");
         }
         printf("[KIEROWNIK] Usunieto kolejke komunikatow\n");
+        fflush(stdout);
     }
 
     if(msg_kasa_id >= 0){
@@ -52,6 +57,7 @@ void sprzatanie(int sig) {
             perror("[KIEROWNIK] Blad msgctl IPC_RMID dla kas");
         }
         printf("[KIEROWNIK] Usunieto kolejke kas\n");
+        fflush(stdout);
     }
 
     if(sem_id >= 0){
@@ -59,6 +65,7 @@ void sprzatanie(int sig) {
             perror("Blad semctl IPC_RMID");
         }
         printf("[KIEROWNIK] Usunieto semafor\n");
+        fflush(stdout);
     }
 
     if(sem_wejscie_id >= 0){
@@ -66,9 +73,11 @@ void sprzatanie(int sig) {
             perror("[KIEROWNIK] Blad semctl IPC_RMID");
         }
         printf("[KIEROWNIK] Usunieto semafor wejscia\n");
+        fflush(stdout);
     }
     
     printf("[KIEROWNIK] Sklep zamknięty. Do widzenia.\n");
+    fflush(stdout);
     exit(0);
 }
 
@@ -77,6 +86,7 @@ int main(){
     signal(SIGCHLD, SIG_IGN);
 
     printf("[KIEROWNIK] Otwieram ciastkarnie\n");
+    fflush(stdout);
 
     key_t klucz = ftok(SCIEZKA_KLUCZA, PROJ_ID_SHM);
     if(klucz == -1){
@@ -103,6 +113,14 @@ int main(){
     memset(dane, 0, sizeof(DaneWspolne));
     dane->sklep_otwarty = 1;
     dane->piekarnia_otwarta = 1;
+
+    dane->kasa_otwarta[0] = 1;
+    dane->kasa_otwarta[1] = 0;
+    dane->kasa_kolejka[0] = 0;
+    dane->kasa_kolejka[1] = 0;
+    dane->kasa_obsluzonych[0] = 0;
+    dane->kasa_obsluzonych[1] = 0;
+
     //printf("[Kierownik] Pamiec dzielona gotowa\n");
 
     key_t klucz_sem = ftok(SCIEZKA_KLUCZA, PROJ_ID_SEM);
@@ -174,7 +192,26 @@ int main(){
         perror("Nie udalo sie uruchomic piekarza");
         exit(1);
     }
-    printf("[KIEROWNIK] Zatrudnilem piekarza %d", piekarz);
+    printf("[KIEROWNIK] Zatrudnilem piekarza %d\n", piekarz);
+    fflush(stdout);
+
+    pid_t kasjer1 = fork();
+    if(kasjer1 == 0){
+        execl("./kasjer", "kasjer", "1", NULL);
+        perror("Nie udalo sie uruchomic kasjera 1");
+        exit(1);
+    }
+    printf("[KIEROWNIK] Zatrudnilem kasjera 1 PID: %d\n", kasjer1);
+    fflush(stdout);
+
+    pid_t kasjer2 = fork();
+    if(kasjer2 == 0){
+        execl("./kasjer", "kasjer", "2", NULL);
+        perror("Nie udalo sie uruchomic kasjera 2");
+        exit(1);
+    }
+    printf("[KIEROWNIK] Zatrudnilem kasjera 2 PID: %d\n", kasjer2);
+    fflush(stdout);
 
     while(1){
         sleep(1);

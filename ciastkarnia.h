@@ -13,9 +13,9 @@
 #include <sys/msg.h>
 
 #define LICZBA_RODZAJOW 12
-#define MAX_KLIENTOW 8
+#define MAX_KLIENTOW 6
 #define MAX_POJEMNOSC 20
-#define PROG_DRUGIEJ_KASY 4 
+#define PROG_DRUGIEJ_KASY 3
 #define SCIEZKA_KLUCZA "/tmp"
 #define PROJ_ID_SHM 'S'
 #define PROJ_ID_SEM 'E'
@@ -43,6 +43,10 @@ typedef struct {
 
     int inwentaryzacja;
     int ewakuacja;
+
+    int kasa_otwarta[2];
+    int kasa_kolejka[2];
+    int kasa_obsluzonych[2];
     
 } DaneWspolne;
 
