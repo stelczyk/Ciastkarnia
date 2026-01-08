@@ -2,6 +2,8 @@
 #include <sys/wait.h>
 #include <signal.h>
 #include <string.h>
+#include <fcntl.h>
+#include <string.h>
 
 static int shm_id = -1;
 static DaneWspolne *dane = NULL;
@@ -11,6 +13,83 @@ static int sem_wejscie_id = -1;
 static int msg_kasa_id = -1;
 
 
+void obsluga_inwentaryzacji(int sig){
+    printf("\n[KIEROWNIK] Otrzymalem sygnal INWENATRYZACJI\n");
+    fflush(stdout);
+
+    if(dane != NULL){
+        dane->inwentaryzacja = 1;
+    }
+}
+
+void obsluga_ewakuacji(int sig){
+    printf("\n[KIEROWNIK] Otrzymalem sygnal EWAKUACJI\n");
+    fflush(stdout);
+
+    if(dane != NULL){
+        dane->ewakuacja = 1;
+        dane->sklep_otwarty = 0;
+    }
+}
+
+void generuj_raport(){
+    int fd = open("raport.txt", O_WRONLY | O_CREAT | O_TRUNC, 0644);
+    if(fd == -1){
+        perror("[KIEROWNIK] Blad tworzenia pliku raportu");
+        return;
+    }
+    char bufor[2048];
+    int len = 0;
+
+    len += sprintf(bufor + len, "RAPORT INWENTARYZACJI\n\n");
+    len += sprintf(bufor + len, "WYPRODUKOWANO:\n");
+    for(int i = 0; i < LICZBA_RODZAJOW; i++) {
+        if(dane->wyprodukowano[i] > 0) {
+            len += sprintf(bufor + len, "%s: %d szt.\n", NAZWA_PRODUKTOW[i], dane->wyprodukowano[i]);
+        }
+    }
+    
+    
+    len += sprintf(bufor + len, "\nNA PODAJNIKACH:\n");
+    for(int i = 0; i < LICZBA_RODZAJOW; i++) {
+        if(dane->na_podajniku[i] > 0) {
+            len += sprintf(bufor + len, "%s: %d szt.\n", NAZWA_PRODUKTOW[i], dane->na_podajniku[i]);
+        }
+    }
+    
+    
+    len += sprintf(bufor + len, "\nSPRZEDANO:\n");
+    for(int i = 0; i < LICZBA_RODZAJOW; i++) {
+        if(dane->sprzedano[i] > 0) {
+            len += sprintf(bufor + len, "%s: %d szt.\n", NAZWA_PRODUKTOW[i], dane->sprzedano[i]);
+        }
+    }
+    
+    
+    len += sprintf(bufor + len, "\nKASY:\n");
+    len += sprintf(bufor + len, "Kasa 1: %d klientow\n", dane->kasa_obsluzonych[0]);
+    len += sprintf(bufor + len, "Kasa 2: %d klientow\n", dane->kasa_obsluzonych[1]);
+    
+    
+    int suma_kosz = 0;
+    for(int i = 0; i < LICZBA_RODZAJOW; i++) {
+        suma_kosz += dane->w_koszu[i];
+    }
+    if(suma_kosz > 0) {
+        len += sprintf(bufor + len, "\nKOSZ (ewakuacja):\n");
+        for(int i = 0; i < LICZBA_RODZAJOW; i++) {
+            if(dane->w_koszu[i] > 0) {
+                len += sprintf(bufor + len, "%s: %d szt.\n", NAZWA_PRODUKTOW[i], dane->w_koszu[i]);
+            }
+        }
+    }
+    
+    write(fd, bufor, len);
+    close(fd);
+    
+    printf("[KIEROWNIK] Raport zapisano do: raport.txt\n");
+    fflush(stdout);
+}
 
 void sprzatanie(int sig) {
     printf("\n\n[KIEROWNIK] Otrzymano sygnał zakończenia\n");
@@ -84,6 +163,8 @@ void sprzatanie(int sig) {
 int main(){
     signal(SIGINT, sprzatanie);
     signal(SIGCHLD, SIG_IGN);
+    signal(SYGNAL_INWENTARYZACJA, obsluga_inwentaryzacji);
+    signal(SYGNAL_EWAKUACJA, obsluga_ewakuacji);
 
     printf("[KIEROWNIK] Otwieram ciastkarnie\n");
     fflush(stdout);
@@ -233,21 +314,31 @@ int main(){
             printf("\n[KIEROWNIK] Czas pracy minal! Zamykam sklep.\n");
             fflush(stdout);
 
-            dane->sklep_otwarty = 0;
+            dane->zamykanie = 1;
             dane->piekarnia_otwarta = 0;
-            dane->inwentaryzacja = 1;
-
-            sleep(3); 
-            
-            printf("[KIEROWNIK] Generuje raport...\n"); //TODO
+            printf("[KIEROWNIK] Czekam az klienci skoncza zakupy...\n");
             fflush(stdout);
-            
-            sprzatanie(0);
+
+            while(dane->klienci_w_sklepie > 0){
+                printf("[KIEROWNIK] Pozostalo klientow %d\n", dane->klienci_w_sklepie);
+                fflush(stdout);
+                sleep(2);
+            }
+            dane->sklep_otwarty = 0;
+            printf("[KIEROWNIK] Wszyscy klienci wyszli, zamykam sklep\n");
+            fflush(stdout);
+
+            if(dane->inwentaryzacja){
+                printf("[KIEROWNIK] Generuje raport\n");
+                fflush(stdout);
+                generuj_raport();
+            }
+            break;
         }
 
         sleep(1);
 
-        if(dane->sklep_otwarty){
+        if(dane->sklep_otwarty && !dane->zamykanie){
             pid_t klient = fork();
             if(klient == 0){
                 execl("./klient", "klient", NULL);
@@ -256,5 +347,6 @@ int main(){
         }
         }
     }
+    sprzatanie(0);
     return 0;
 }

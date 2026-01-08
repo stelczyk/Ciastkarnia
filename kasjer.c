@@ -62,7 +62,12 @@ int main(int argc, char* argv[]){
     fflush(stdout);
     int poprzedni_status = dane->kasa_otwarta[numer_kasy - 1];
 
-    while(dane->sklep_otwarty){
+    while(dane->sklep_otwarty || dane->kasa_kolejka[numer_kasy - 1] > 0){
+        if(dane->ewakuacja) {
+            printf("[KASJER %d] Kasa %d - EWAKUACJA! Zamykam kasę!\n", kasjerID, numer_kasy);
+            fflush(stdout);
+            break;
+        }
 
         int moja_kasa_index = numer_kasy - 1;
 

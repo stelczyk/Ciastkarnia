@@ -63,6 +63,11 @@ int main(){
     //printf("[PIEKARZ %d] Polaczylem sie z kolejka komunikatow\n");
 
     while(dane->piekarnia_otwarta){
+        if(dane->ewakuacja) {
+            printf("[PIEKARZ %d] EWAKUACJA! Kończę pracę!\n", piekarzID);
+            fflush(stdout);
+            break;
+        }
         int indeks = losowanie(0,LICZBA_RODZAJOW - 1);
         int czasPieczenia = losowanie(1,3);
         int ilosc = losowanie(2,10);

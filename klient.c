@@ -91,6 +91,16 @@ int main(){
 
     semafor_zablokuj(sem_id);
 
+
+    if(!dane->sklep_otwarty || dane->zamykanie){
+        semafor_odblokuj(sem_id);
+        semafor_odblokuj(sem_wejscie_id);
+        printf("[KLIENT %d] Sklep zamkniety, nie wchodze.\n", klientID);
+        fflush(stdout);
+        shmdt(dane);
+        exit(0);
+    }
+
     dane->klienci_w_sklepie++;
     int ilu_w_sklepie = dane->klienci_w_sklepie;
     printf("[KLIENT %d] Wchodze do sklepu (klientow: %d/%d)\n", klientID, ilu_w_sklepie, MAX_KLIENTOW);
@@ -100,21 +110,8 @@ int main(){
         printf("[SYSTEM] Otwieram kase 2,   Klientow: %d >= %d\n", ilu_w_sklepie, PROG_DRUGIEJ_KASY);
         fflush(stdout);
     }
-           
+       
     semafor_odblokuj(sem_id);
-
-    //printf("[KLIENT %d] Wchodze do sklepu (klientow: %d/%d)\n", klientID, ilu_w_sklepie, MAX_KLIENTOW);
-    if(!dane->sklep_otwarty){
-        printf("[KLIENT %d] Sklep zamkniety! Wychodzę.\n", klientID);
-        fflush(stdout);
-        
-        semafor_zablokuj(sem_id);
-        dane->klienci_w_sklepie--;
-        semafor_odblokuj(sem_id);
-        semafor_odblokuj(sem_wejscie_id);
-        shmdt(dane);
-        exit(0);
-    }       
 
     sleep(3);
 
@@ -156,7 +153,24 @@ int main(){
     fflush(stdout);
 
     for(int i = 0; i < LICZBA_RODZAJOW; i++){
-        if(listaZakupow[i] == 0) continue;
+    if(dane->ewakuacja) {
+        printf("[KLIENT %d] EWAKUACJA! Odkładam towar do kosza\n", klientID);
+        fflush(stdout);
+        
+        semafor_zablokuj(sem_id);
+        for(int j = 0; j < LICZBA_RODZAJOW; j++) {
+            dane->w_koszu[j] += koszyk[j];
+            koszyk[j] = 0;
+        }
+        dane->klienci_w_sklepie--;
+        semafor_odblokuj(sem_id);
+        
+        semafor_odblokuj(sem_wejscie_id);
+        shmdt(dane);
+        exit(0);
+    }
+    
+    if(listaZakupow[i] == 0) continue;
 
         int chce = listaZakupow[i];
         int wzialem = 0;
@@ -196,42 +210,56 @@ int main(){
         usleep(100000);
     }
 
+    if(dane->ewakuacja) {
+        printf("[KLIENT %d] EWAKUACJA! Odkładam towar do kosza i uciekam!\n", klientID);
+        fflush(stdout);
     
+        semafor_zablokuj(sem_id);
+        for(int j = 0; j < LICZBA_RODZAJOW; j++) {
+            dane->w_koszu[j] += koszyk[j];
+        }
+        dane->klienci_w_sklepie--;
+        semafor_odblokuj(sem_id);
+    
+        semafor_odblokuj(sem_wejscie_id);
+        shmdt(dane);
+        exit(0);
+    }
     if(suma > 0){
     
-    semafor_zablokuj(sem_id);
+        semafor_zablokuj(sem_id);
 
-    int wybrana_kasa = 1;
-    if(dane->kasa_otwarta[1]){
-        if(dane->kasa_kolejka[1] < dane->kasa_kolejka[0]){
-            wybrana_kasa = 2;
+        int wybrana_kasa = 1;
+        if(dane->kasa_otwarta[1]){
+            if(dane->kasa_kolejka[1] < dane->kasa_kolejka[0]){
+                wybrana_kasa = 2;
+            }
         }
-    }
 
-    dane->kasa_kolejka[wybrana_kasa - 1]++;
-    int moja_pozycja = dane->kasa_kolejka[wybrana_kasa - 1];
-    semafor_odblokuj(sem_id);
+        dane->kasa_kolejka[wybrana_kasa - 1]++;
+        int moja_pozycja = dane->kasa_kolejka[wybrana_kasa - 1];
+        semafor_odblokuj(sem_id);
 
-    printf("[KLIENT %d] Ide do kasy %d, pozycja w kolecje %d\n", klientID, wybrana_kasa, moja_pozycja);
-    fflush(stdout);
-    sleep(3);
-
-    MsgKoszyk wiadomosc;
-    wiadomosc.mtype = wybrana_kasa;
-    wiadomosc.klient_pid = klientID;
-    wiadomosc.suma = suma;
-    for(int i = 0;i < LICZBA_RODZAJOW; i++){
-        wiadomosc.koszyk[i] = koszyk[i];
-    }
-
-    if(msgsnd(msg_kasa_id, &wiadomosc, sizeof(wiadomosc) - sizeof(long),0) == -1){
-        perror("[KLIENT] Blad msgsnd dla kasy");
-    }
-    sleep(1);
-    }else{
-        printf("[KLIENT %d] Nic nie kupilem, wychodze\n", klientID);
+        printf("[KLIENT %d] Ide do kasy %d, pozycja w kolecje %d\n", klientID, wybrana_kasa, moja_pozycja);
         fflush(stdout);
-    }
+        sleep(3);
+
+        MsgKoszyk wiadomosc;
+        wiadomosc.mtype = wybrana_kasa;
+        wiadomosc.klient_pid = klientID;
+        wiadomosc.suma = suma;
+        for(int i = 0;i < LICZBA_RODZAJOW; i++){
+            wiadomosc.koszyk[i] = koszyk[i];
+        }
+
+        if(msgsnd(msg_kasa_id, &wiadomosc, sizeof(wiadomosc) - sizeof(long),0) == -1){
+            perror("[KLIENT] Blad msgsnd dla kasy");
+        }
+        sleep(1);
+        }else{
+            printf("[KLIENT %d] Nic nie kupilem, wychodze\n", klientID);
+            fflush(stdout);
+        }
     
     semafor_zablokuj(sem_id);
     dane->klienci_w_sklepie--;

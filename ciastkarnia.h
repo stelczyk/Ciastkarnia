@@ -11,11 +11,12 @@
 #include <errno.h>
 #include <sys/sem.h>
 #include <sys/msg.h>
+#include <signal.h>
 
 #define LICZBA_RODZAJOW 12
 #define MAX_KLIENTOW 6
 #define MAX_POJEMNOSC 20
-#define PROG_DRUGIEJ_KASY 3
+#define PROG_DRUGIEJ_KASY (MAX_KLIENTOW/2)
 #define CZAS_PRZED_OTWARCIEM_SKLEPU 5
 #define CZAS_PRACY_SKLEPU 60
 
@@ -25,6 +26,9 @@
 #define PROJ_ID_MSG 'M'
 #define PROJ_ID_MSG_KASA 'K'
 #define PROJ_ID_SEM_WEJSCIE 'W'
+
+#define SYGNAL_INWENTARYZACJA SIGUSR1
+#define SYGNAL_EWAKUACJA SIGUSR2
 
 struct sembuf;
 
@@ -42,6 +46,7 @@ typedef struct {
     int wyprodukowano[LICZBA_RODZAJOW];
     int sprzedano[LICZBA_RODZAJOW];
     int na_podajniku[LICZBA_RODZAJOW];
+    int w_koszu[LICZBA_RODZAJOW];
 
     int klienci_w_sklepie;
     int sklep_otwarty; // 1 = otwarty, 0 = zamkniety
@@ -49,6 +54,7 @@ typedef struct {
 
     int inwentaryzacja;
     int ewakuacja;
+    int zamykanie;
 
     int kasa_otwarta[2];
     int kasa_kolejka[2];
