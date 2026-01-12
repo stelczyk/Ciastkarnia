@@ -9,12 +9,11 @@ static int shm_id = -1;
 static DaneWspolne *dane = NULL;
 static int sem_id = -1;
 static int msg_id = -1;
-static int sem_wejscie_id = -1;
 static int msg_kasa_id = -1;
 
 
 void obsluga_inwentaryzacji(int sig){
-    printf("\n[KIEROWNIK] Otrzymalem sygnal INWENATRYZACJI\n");
+    printf(KOLOR_KIEROWNIK"\n[KIEROWNIK] Otrzymalem sygnal INWENATRYZACJI\n"RESET);
     fflush(stdout);
 
     if(dane != NULL){
@@ -23,7 +22,7 @@ void obsluga_inwentaryzacji(int sig){
 }
 
 void obsluga_ewakuacji(int sig){
-    printf("\n[KIEROWNIK] Otrzymalem sygnal EWAKUACJI\n");
+    printf(KOLOR_KIEROWNIK"\n[KIEROWNIK] Otrzymalem sygnal EWAKUACJI\n"RESET);
     fflush(stdout);
 
     if(dane != NULL){
@@ -87,19 +86,19 @@ void generuj_raport(){
     write(fd, bufor, len);
     close(fd);
     
-    printf("[KIEROWNIK] Raport zapisano do: raport.txt\n");
+    printf(KOLOR_KIEROWNIK"[KIEROWNIK] Raport zapisano do: raport.txt\n"RESET);
     fflush(stdout);
 }
 
 void sprzatanie(int sig) {
-    printf("\n\n[KIEROWNIK] Otrzymano sygnał zakończenia\n");
+    printf(KOLOR_KIEROWNIK"\n\n[KIEROWNIK] Otrzymano sygnal‚ zakonczenia\n"RESET);
     fflush(stdout);
 
     if(dane != NULL){
         dane->sklep_otwarty = 0;
         dane->piekarnia_otwarta = 0;
     }
-    printf("[KIEROWNIK] Zamykam sklep i zwalniam pracowników...\n");
+    printf(KOLOR_KIEROWNIK"[KIEROWNIK] Zamykam sklep i zwalniam pracownikow...\n"RESET);
     fflush(stdout);
     
     signal(SIGTERM, SIG_IGN);
@@ -140,33 +139,27 @@ void sprzatanie(int sig) {
     }
 
     if(sem_id >= 0){
-        if(semctl(sem_id,0, IPC_RMID) == -1){
+        if(semctl(sem_id, 0, IPC_RMID) == -1){
             perror("Blad semctl IPC_RMID");
         }
-        printf("[KIEROWNIK] Usunieto semafor\n");
-        fflush(stdout);
-    }
-
-    if(sem_wejscie_id >= 0){
-        if(semctl(sem_wejscie_id,0,IPC_RMID) == -1){
-            perror("[KIEROWNIK] Blad semctl IPC_RMID");
-        }
-        printf("[KIEROWNIK] Usunieto semafor wejscia\n");
+        printf("[KIEROWNIK] Usunieto grupe semaforowa\n");
         fflush(stdout);
     }
     
-    printf("[KIEROWNIK] Sklep zamknięty. Do widzenia.\n");
+    printf(KOLOR_KIEROWNIK"[KIEROWNIK] Sklep zamkniety. Do widzenia.\n"RESET);
     fflush(stdout);
     exit(0);
 }
 
 int main(){
     signal(SIGINT, sprzatanie);
+    signal(SIGTERM, sprzatanie); 
     signal(SIGCHLD, SIG_IGN);
     signal(SYGNAL_INWENTARYZACJA, obsluga_inwentaryzacji);
     signal(SYGNAL_EWAKUACJA, obsluga_ewakuacji);
 
-    printf("[KIEROWNIK] Otwieram ciastkarnie\n");
+
+    printf(KOLOR_KIEROWNIK"[KIEROWNIK] Otwieram ciastkarnie\n"RESET);
     fflush(stdout);
 
     key_t klucz = ftok(SCIEZKA_KLUCZA, PROJ_ID_SHM);
@@ -204,26 +197,19 @@ int main(){
 
     //printf("[Kierownik] Pamiec dzielona gotowa\n");
 
-    key_t klucz_sem = ftok(SCIEZKA_KLUCZA, PROJ_ID_SEM);
-    if (klucz_sem == -1){
-        perror("[KIEROWNIK] Blad ftok semafor");
-        exit(1);
-    }
-
-    //printf("[KIEROWNIK] Klucz semafora: %d\n", klucz_sem);
-
-    sem_id = semget(klucz_sem, 1, IPC_CREAT | 0600);
+    sem_id = utworz_grupe_semaforowa();
     if(sem_id == -1){
-        perror("[KIEROWNIK] Blad semget");
+        perror("[KIEROWNIK] Blad tworzenia grupy semaforowej");
         exit(1);
     }
-    //printf("[KIEROWNIK] Semafor ID: %d\n", sem_id);
 
-    if(semctl(sem_id, 0, SETVAL,1) == -1){
-        perror("[KIEROWNIK] Blad semctl");
+    if(ustaw_wartosci_semaforow(sem_id) == -1){
+        perror("[KIEROWNIK] Blad ustawienia wartosci semaforow");
         exit(1);
     }
-    //printf("[KIEROWNIK] Semafor ustawiony na 1 (odblokowany)\n");
+
+    //printf("[KIEROWNIK] Grupa semaforowa utworzona, ID: %d\n", sem_id);
+    //fflush(stdout);
 
     key_t klucz_msg = ftok(SCIEZKA_KLUCZA, PROJ_ID_MSG);
     if (klucz_msg == -1){
@@ -239,22 +225,7 @@ int main(){
     }
     //printf("[KIEROWNIK] Kolejka komunikatow ID: %d\n", msg_id);
 
-    key_t klucz_sem_wejscie = ftok(SCIEZKA_KLUCZA, PROJ_ID_SEM_WEJSCIE);
-    if(klucz_sem_wejscie == -1){
-        perror("[KIEROWNIK] Blad ftok semafor wejsca");
-        exit(1);
-    }
-
-    sem_wejscie_id = semget(klucz_sem_wejscie, 1, IPC_CREAT | 0600);
-    if(sem_wejscie_id == -1){
-        perror("[KIEROWNIK] Blad semget dla semafora wejscia");
-        exit(1);
-    }
-
-    if(semctl(sem_wejscie_id, 0, SETVAL, MAX_KLIENTOW) == -1){
-        perror("[KIEROWNIK] Blad semctl dla wejscia");
-        exit(1);
-    }
+    
 
     key_t klucz_msg_kasa = ftok(SCIEZKA_KLUCZA,PROJ_ID_MSG_KASA);
         if(klucz_msg_kasa == -1){
@@ -273,7 +244,7 @@ int main(){
         perror("Nie udalo sie uruchomic piekarza");
         exit(1);
     }
-    printf("[KIEROWNIK] Zatrudnilem piekarza %d\n", piekarz);
+    printf(KOLOR_KIEROWNIK"[KIEROWNIK] Zatrudnilem piekarza %d\n"RESET, piekarz);
     fflush(stdout);
 
     pid_t kasjer1 = fork();
@@ -282,8 +253,10 @@ int main(){
         perror("Nie udalo sie uruchomic kasjera 1");
         exit(1);
     }
-    printf("[KIEROWNIK] Zatrudnilem kasjera 1 PID: %d\n", kasjer1);
+    printf(KOLOR_KIEROWNIK"[KIEROWNIK] Zatrudnilem kasjera 1 PID: %d\n"RESET, kasjer1);
     fflush(stdout);
+    dane->kasjer1_pid = kasjer1;
+
 
     pid_t kasjer2 = fork();
     if(kasjer2 == 0){
@@ -291,15 +264,16 @@ int main(){
         perror("Nie udalo sie uruchomic kasjera 2");
         exit(1);
     }
-    printf("[KIEROWNIK] Zatrudnilem kasjera 2 PID: %d\n", kasjer2);
+    printf(KOLOR_KIEROWNIK"[KIEROWNIK] Zatrudnilem kasjera 2 PID: %d\n"RESET, kasjer2);
     fflush(stdout);
+     dane->kasjer2_pid = kasjer2;
 
-    printf("[KIEROWNIK] Piekarnia otwarta! Sklep otworzy sie za %d sekund\n", CZAS_PRZED_OTWARCIEM_SKLEPU);
+    printf(KOLOR_KIEROWNIK"[KIEROWNIK] Piekarnia otwarta! Sklep otworzy sie za %d sekund\n"RESET, CZAS_PRZED_OTWARCIEM_SKLEPU);
     fflush(stdout);
 
     sleep(CZAS_PRZED_OTWARCIEM_SKLEPU);
     
-    printf("[KIEROWNIK] Sklep otwarty!\n");
+    printf(KOLOR_KIEROWNIK"[KIEROWNIK] Sklep otwarty!\n"RESET);
     fflush(stdout);
 
     time_t czas_startu = time(NULL);
@@ -310,41 +284,62 @@ int main(){
         int pozostalo = (int)(czas_konca - teraz);
 
 
-        if(teraz >= czas_konca){
-            printf("\n[KIEROWNIK] Czas pracy minal! Zamykam sklep.\n");
+        if(teraz >= czas_konca || dane->ewakuacja){ //sprawdza czy czas pracy minal lub ewakuacja
+           if (dane->ewakuacja) {
+                printf(KOLOR_KIEROWNIK"\n[KIEROWNIK] EWAKUACJA! Zamykam sklep.\n"RESET); //rozne komunikaty
+            } else {
+                printf(KOLOR_KIEROWNIK"\n[KIEROWNIK] Czas pracy minął! Zamykam sklep.\n"RESET);
+            }
             fflush(stdout);
 
-            dane->zamykanie = 1;
+            dane->zamykanie = 1; //flagi zamykania
             dane->piekarnia_otwarta = 0;
-            printf("[KIEROWNIK] Czekam az klienci skoncza zakupy...\n");
+            printf(KOLOR_KIEROWNIK"[KIEROWNIK] Czekam az klienci skoncza zakupy...\n"RESET);
             fflush(stdout);
 
+            int ostatnia_ilosc = -1; //czeka na wyjscie wszystkich klientow
             while(dane->klienci_w_sklepie > 0){
-                printf("[KIEROWNIK] Pozostalo klientow %d\n", dane->klienci_w_sklepie);
-                fflush(stdout);
-                sleep(2);
+                if(dane->klienci_w_sklepie != ostatnia_ilosc){
+                    ostatnia_ilosc = dane->klienci_w_sklepie;
+                    semafor_zablokuj(sem_id, SEM_OUTPUT);
+                    printf(KOLOR_KIEROWNIK"[KIEROWNIK] Pozostalo klientow %d\n"RESET, dane->klienci_w_sklepie);
+                    fflush(stdout);     
+                    semafor_odblokuj(sem_id, SEM_OUTPUT);
+                }
+                
+                //usleep(100000);
             }
             dane->sklep_otwarty = 0;
-            printf("[KIEROWNIK] Wszyscy klienci wyszli, zamykam sklep\n");
+            printf(KOLOR_KIEROWNIK"[KIEROWNIK] Wszyscy klienci wyszli, zamykam sklep\n"RESET);
             fflush(stdout);
-
+            
+            //generuje raport przy inwentaryzacji
             if(dane->inwentaryzacja){
-                printf("[KIEROWNIK] Generuje raport\n");
+                printf(KOLOR_KIEROWNIK"[KIEROWNIK] Generuje raport\n"RESET);
                 fflush(stdout);
                 generuj_raport();
             }
             break;
         }
+        //xdusleep(10000);
 
-        sleep(1);
+        //sleep(losowanie(1,2));
 
-        if(dane->sklep_otwarty && !dane->zamykanie){
-            pid_t klient = fork();
-            if(klient == 0){
-                execl("./klient", "klient", NULL);
-                perror("Nie udalo sie uruchomic klienta");
-                exit(1);
-        }
+        if(dane->sklep_otwarty && !dane->zamykanie){ //generuj nowego klienta jesli otwarty sklep
+            semafor_zablokuj_bez_undo(sem_id, SEM_MAX_PROCESOW); //ogranicza liczbe procesow
+
+            if(!dane->sklep_otwarty || dane->zamykanie){
+                semafor_odblokuj_bez_undo(sem_id, SEM_MAX_PROCESOW);
+            }else{
+         
+                pid_t klient = fork();
+                if(klient == 0){
+                    execl("./klient", "klient", NULL);
+                    perror("Nie udalo sie uruchomic klienta");
+                    exit(1);
+                }
+            }
+      
         }
     }
     sprzatanie(0);
