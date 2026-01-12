@@ -132,7 +132,7 @@ int main(){
             fflush(stdout);
             semafor_odblokuj(sem_id, SEM_OUTPUT);
         }
-        usleep(100000); //xd
+        //usleep(100000); //xd
         
     }
 

@@ -148,7 +148,7 @@ int main(){
 
     printf(KOLOR_KLIENT "[KLIENT %d] Robie zakupy\n"RESET, klientID);
     fflush(stdout);
-    usleep(200000);
+    //usleep(200000);
     
     for(int i = 0; i < LICZBA_RODZAJOW; i++){
         //sprawdz ewakuację
@@ -172,6 +172,7 @@ int main(){
             semafor_zablokuj(sem_id, SEM_MUTEX_DANE);
             for(int j = 0; j < LICZBA_RODZAJOW; j++) {
                 dane->w_koszu[j] += koszyk[j];
+                dane->sprzedano[j] -= koszyk[j]; 
                 koszyk[j] = 0;
             }
         dane->klienci_w_sklepie--;
@@ -211,7 +212,7 @@ int main(){
             printf(KOLOR_KLIENT "[KLIENT %d] Wzialem %s #%d\n"RESET, klientID, NAZWA_PRODUKTOW[i], produkt.numer_sztuki);
             fflush(stdout);
             semafor_odblokuj(sem_id, SEM_OUTPUT);
-            usleep(200000);
+            //usleep(200000);
         }
 
         //komunikat o braku towaru
@@ -249,6 +250,7 @@ int main(){
         semafor_zablokuj(sem_id, SEM_MUTEX_DANE);
         for(int j = 0; j < LICZBA_RODZAJOW; j++) {
             dane->w_koszu[j] += koszyk[j];
+            dane->sprzedano[j] -= koszyk[j]; 
         }
         dane->klienci_w_sklepie--;
         semafor_odblokuj(sem_id, SEM_MUTEX_DANE);
@@ -312,6 +314,7 @@ int main(){
             fflush(stdout);
             for(int j = 0; j<LICZBA_RODZAJOW; j++){
                 dane->w_koszu[j] += koszyk[j];
+                dane->sprzedano[j] -= koszyk[j]; 
             }
             dane->klienci_w_sklepie--;
 
@@ -337,6 +340,46 @@ int main(){
         fflush(stdout);
         semafor_odblokuj(sem_id, SEM_OUTPUT);
         
+        
+      /* Sprawdź ewakuację przed pójściem do kasy */
+if (dane->ewakuacja) {
+    semafor_zablokuj(sem_id, SEM_OUTPUT);
+    printf(KOLOR_KLIENT"[KLIENT %d] EWAKUACJA przy kasie! Zostawiam koszyk i uciekam:\n"RESET, klientID);
+    
+    int cos_mialem = 0;
+    for (int j = 0; j < LICZBA_RODZAJOW; j++) {
+        if (koszyk[j] > 0) {
+            printf(KOLOR_KLIENT"  - %s: %d szt.\n"RESET, NAZWA_PRODUKTOW[j], koszyk[j]);
+            cos_mialem = 1;
+        }
+    }
+    if (!cos_mialem) {
+        printf(KOLOR_KLIENT"  (koszyk byl pusty)\n"RESET);
+    }
+    fflush(stdout);
+    semafor_odblokuj(sem_id, SEM_OUTPUT);
+
+    /* Zmniejsz kolejkę (bo już się zapisaliśmy) */
+    semafor_zablokuj(sem_id, SEM_MUTEX_DANE);
+    semafor_zablokuj(sem_id, (wybrana_kasa == 1) ? SEM_KOLEJKA_KASA1 : SEM_KOLEJKA_KASA2);
+    if (dane->kasa_kolejka[wybrana_kasa - 1] > 0) {
+        dane->kasa_kolejka[wybrana_kasa - 1]--;
+    }
+    for (int j = 0; j < LICZBA_RODZAJOW; j++) {
+        dane->w_koszu[j] += koszyk[j];
+        dane->sprzedano[j] -= koszyk[j]; 
+    }
+    dane->klienci_w_sklepie--;
+    semafor_odblokuj(sem_id, (wybrana_kasa == 1) ? SEM_KOLEJKA_KASA1 : SEM_KOLEJKA_KASA2);
+    semafor_odblokuj(sem_id, SEM_MUTEX_DANE);
+
+    semafor_odblokuj_bez_undo(sem_id, SEM_WEJSCIE_SKLEP);
+    semafor_odblokuj_bez_undo(sem_id, SEM_MAX_PROCESOW);
+    shmdt(dane);
+    exit(0);
+}
+
+
         //wyslij koszyk do kasy
         MsgKoszyk wiadomosc;
         wiadomosc.mtype = wybrana_kasa;
@@ -351,14 +394,23 @@ int main(){
         }
 
         // Czekaj na potwierdzenie od kasjera
-        MsgPotwierdzenie potwierdzenie;
-        msgrcv(msg_kasa_id, &potwierdzenie, sizeof(potwierdzenie) - sizeof(long), klientID, 0);
-    }else{
-        printf(KOLOR_KLIENT "[KLIENT %d] Nic nie kupilem, wychodze\n"RESET, klientID);
+       
+MsgPotwierdzenie potwierdzenie;
+int proba = 0;
+while (proba < 50) {  /* Max 5 sekund (50 x 100ms) */
+    if (dane->ewakuacja) {
+        printf(KOLOR_KLIENT"[KLIENT %d] EWAKUACJA! Nie czekam na paragon, uciekam!\n"RESET, klientID);
         fflush(stdout);
+        break;
     }
     
-    //wyjscie ze sklepu
+    ssize_t wynik = msgrcv(msg_kasa_id, &potwierdzenie, 
+                           sizeof(potwierdzenie) - sizeof(long), 
+                           klientID, IPC_NOWAIT);
+    if (wynik != -1) {
+        break;  /* Otrzymano potwierdzenie */
+    }
+    
     semafor_zablokuj(sem_id, SEM_MUTEX_DANE);
     dane->klienci_w_sklepie--;
     int zostalo = dane->klienci_w_sklepie;

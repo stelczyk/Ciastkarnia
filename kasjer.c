@@ -127,7 +127,7 @@ int main(int argc, char* argv[]){
         printf(KOLOR_KASJER"  SUMA: %d zl (%d szt.) - Dziekujemy\n\n"RESET, koszyk.suma, pozycji);
         fflush(stdout);
         semafor_odblokuj(sem_id, SEM_OUTPUT);
-        usleep(800000);
+        //usleep(800000);
 
         // Wyślij potwierdzenie do klienta
         MsgPotwierdzenie potwierdzenie;
