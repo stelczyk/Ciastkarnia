@@ -1,12 +1,21 @@
 #include "ciastkarnia.h"
+#include <signal.h>
 
 static DaneWspolne *dane = NULL;
 static int sem_id = -1;
 static int msg_id = -1;
 //static int sem_wejscie_id = -1;
 static int msg_kasa_id = -1; 
+static volatile sig_atomic_t otrzymano_sigterm = 0;
+
+void obsluga_sigterm(int sig) {
+    otrzymano_sigterm = 1;
+}
 
 int main(){ 
+    //ignoruj SIGTERM podczas inicjalizacji
+    signal(SIGTERM, SIG_IGN);
+    
     srand(time(NULL) + getpid());
     pid_t klientID = getpid();
 
@@ -77,15 +86,18 @@ int main(){
     //zablokuj semafor wejścia
     semafor_zablokuj_bez_undo(sem_id, SEM_WEJSCIE_SKLEP);
 
-    //sprawdz czy sklep nadal otwarty
+    //sprawdz czy sklep nadal otwarty i czy nie ma ewakuacji
     semafor_zablokuj(sem_id, SEM_MUTEX_DANE);
 
-
-    if(!dane->sklep_otwarty || dane->zamykanie){
+    if(!dane->sklep_otwarty || dane->zamykanie || dane->ewakuacja){
         semafor_odblokuj(sem_id, SEM_MUTEX_DANE);
         semafor_odblokuj_bez_undo(sem_id, SEM_WEJSCIE_SKLEP);
         semafor_odblokuj_bez_undo(sem_id, SEM_MAX_PROCESOW);
-        printf( KOLOR_KLIENT"[KLIENT %d] Sklep zamkniety, nie wchodze.\n" RESET, klientID);
+        if(dane->ewakuacja) {
+            printf(KOLOR_KLIENT"[KLIENT %d] EWAKUACJA! Nie wchodze do sklepu.\n"RESET, klientID);
+        } else {
+            printf(KOLOR_KLIENT"[KLIENT %d] Sklep zamkniety, nie wchodze.\n"RESET, klientID);
+        }
         fflush(stdout);
         shmdt(dane);
         exit(0);
@@ -94,6 +106,9 @@ int main(){
     //wejdz do sklepu
     dane->klienci_w_sklepie++;
     int ilu_w_sklepie = dane->klienci_w_sklepie;
+    
+    //teraz mozemy obsluzyc SIGTERM - jestesmy w sklepie
+    signal(SIGTERM, obsluga_sigterm);
 
     semafor_zablokuj(sem_id, SEM_OUTPUT);
     printf( KOLOR_KLIENT "[KLIENT %d] Wchodze do sklepu (klientow: %d/%d)\n"RESET, klientID, ilu_w_sklepie, MAX_KLIENTOW);
@@ -129,12 +144,14 @@ int main(){
     }
 
     //Wyswietl liste zakupow
-    printf(KOLOR_KLIENT "[KLIENT %d] Chce kupic:\n"RESET, klientID);
+
+    printf(KOLOR_KLIENT "[KLIENT %d] Chce kupic:"RESET, klientID);
     for(int i = 0; i < LICZBA_RODZAJOW; i++){
         if(listaZakupow[i] > 0){
             printf(KOLOR_KLIENT"  - %s: %d szt."RESET, NAZWA_PRODUKTOW[i], listaZakupow[i]);
         }
     }
+
     printf("\n");
     fflush(stdout);
 
@@ -153,37 +170,39 @@ int main(){
     for(int i = 0; i < LICZBA_RODZAJOW; i++){
         //sprawdz ewakuację
         if(dane->ewakuacja) {
+            /* Wszystko w jednej sekcji krytycznej */
+            semafor_zablokuj(sem_id, SEM_MUTEX_DANE);
             semafor_zablokuj(sem_id, SEM_OUTPUT);
+            
             printf(KOLOR_KLIENT "[KLIENT %d] EWAKUACJA! Odkładam towar do kosza:\n"RESET, klientID);
-    
             int cos_mialem = 0;
             for(int j = 0; j < LICZBA_RODZAJOW; j++) {
                 if(koszyk[j] > 0) {
                     printf(KOLOR_KLIENT "  - %s: %d szt.\n"RESET, NAZWA_PRODUKTOW[j], koszyk[j]);
                     cos_mialem = 1;
+                    dane->w_koszu[j] += koszyk[j];
+                    dane->sprzedano[j] -= koszyk[j]; 
                 }
             }
             if(!cos_mialem) {
-                printf(KOLOR_KLIENT "  (koszyk byl pusty - nic nie wzialem)\n"RESET);
+                printf(KOLOR_KLIENT "  (koszyk byl pusty)\n"RESET);
             }
+            
+            dane->klienci_w_sklepie--;
+            int zostalo = dane->klienci_w_sklepie;
+            printf(KOLOR_KLIENT "[KLIENT %d] EWAKUACJA - wychodze! (zostalo klientow: %d)\n"RESET, klientID, zostalo);
             fflush(stdout);
+            
             semafor_odblokuj(sem_id, SEM_OUTPUT);
+            semafor_odblokuj(sem_id, SEM_MUTEX_DANE);
+            
+            semafor_odblokuj_bez_undo(sem_id, SEM_WEJSCIE_SKLEP);
+            semafor_odblokuj_bez_undo(sem_id, SEM_MAX_PROCESOW);
+            shmdt(dane);
+            exit(0);
+        }
     
-            semafor_zablokuj(sem_id, SEM_MUTEX_DANE);
-            for(int j = 0; j < LICZBA_RODZAJOW; j++) {
-                dane->w_koszu[j] += koszyk[j];
-                dane->sprzedano[j] -= koszyk[j]; 
-                koszyk[j] = 0;
-            }
-        dane->klienci_w_sklepie--;
-        semafor_odblokuj(sem_id, SEM_MUTEX_DANE);
-        semafor_odblokuj_bez_undo(sem_id, SEM_WEJSCIE_SKLEP);
-        semafor_odblokuj_bez_undo(sem_id, SEM_MAX_PROCESOW);
-        shmdt(dane);
-        exit(0);
-    }
-    
-    //pomin produkty ktorych nie chcemy
+        //pomin produkty ktorych nie chcemy
     if(listaZakupow[i] == 0) continue;
 
         int chce = listaZakupow[i];
@@ -212,7 +231,6 @@ int main(){
             printf(KOLOR_KLIENT "[KLIENT %d] Wzialem %s #%d\n"RESET, klientID, NAZWA_PRODUKTOW[i], produkt.numer_sztuki);
             fflush(stdout);
             semafor_odblokuj(sem_id, SEM_OUTPUT);
-            //usleep(200000);
         }
 
         //komunikat o braku towaru
@@ -231,29 +249,32 @@ int main(){
 
     //sprawdz ewakuacje po zakończeniu zakupów
     if(dane->ewakuacja) {
+        /* Wszystko w jednej sekcji krytycznej */
+        semafor_zablokuj(sem_id, SEM_MUTEX_DANE);
         semafor_zablokuj(sem_id, SEM_OUTPUT);
+        
         printf(KOLOR_KLIENT "[KLIENT %d] EWAKUACJA! Odkładam towar do kosza:\n"RESET, klientID);
-    
         int cos_mialem = 0;
         for(int j = 0; j < LICZBA_RODZAJOW; j++) {
             if(koszyk[j] > 0) {
                 printf(KOLOR_KLIENT "  - %s: %d szt.\n"RESET, NAZWA_PRODUKTOW[j], koszyk[j]);
                 cos_mialem = 1;
+                dane->w_koszu[j] += koszyk[j];
+                dane->sprzedano[j] -= koszyk[j]; 
             }
         }
         if(!cos_mialem) {
-                printf(KOLOR_KLIENT "  (koszyk byl pusty - nic nie wzialem)\n"RESET);
+            printf(KOLOR_KLIENT "  (koszyk byl pusty)\n"RESET);
         }
-        fflush(stdout);
-        semafor_odblokuj(sem_id, SEM_OUTPUT);
-
-        semafor_zablokuj(sem_id, SEM_MUTEX_DANE);
-        for(int j = 0; j < LICZBA_RODZAJOW; j++) {
-            dane->w_koszu[j] += koszyk[j];
-            dane->sprzedano[j] -= koszyk[j]; 
-        }
+        
         dane->klienci_w_sklepie--;
+        int zostalo = dane->klienci_w_sklepie;
+        printf(KOLOR_KLIENT "[KLIENT %d] EWAKUACJA - wychodze! (zostalo klientow: %d)\n"RESET, klientID, zostalo);
+        fflush(stdout);
+        
+        semafor_odblokuj(sem_id, SEM_OUTPUT);
         semafor_odblokuj(sem_id, SEM_MUTEX_DANE);
+        
         semafor_odblokuj_bez_undo(sem_id, SEM_WEJSCIE_SKLEP);
         semafor_odblokuj_bez_undo(sem_id, SEM_MAX_PROCESOW);
         shmdt(dane);
@@ -262,18 +283,20 @@ int main(){
 
     //podsumowanie zakupow
     semafor_zablokuj(sem_id, SEM_OUTPUT);
-    printf(KOLOR_KLIENT "[KLIENT %d] Skonczylem zakupy, w koszyku mam:\n"RESET, klientID);
+    printf(KOLOR_KLIENT "[KLIENT %d] Skonczylem zakupy, w koszyku mam:"RESET, klientID);
     int ile_mam = 0;
     for(int i = 0; i < LICZBA_RODZAJOW; i++){
         if(koszyk[i] > 0){
-            printf(KOLOR_KLIENT "  - %s: %d szt.\n"RESET, NAZWA_PRODUKTOW[i], koszyk[i]);
+            printf(KOLOR_KLIENT "  - %s: %d szt."RESET, NAZWA_PRODUKTOW[i], koszyk[i]);
             ile_mam += koszyk[i];
         }
     }
+    
     if(ile_mam == 0){
         printf(KOLOR_KLIENT "  (nic - wszystko bylo niedostepne)\n"RESET);
     }   
     printf(KOLOR_KLIENT "  SUMA: %d zl\n"RESET, suma);
+    printf("\n");
     fflush(stdout);
     semafor_odblokuj(sem_id, SEM_OUTPUT);
 
@@ -284,47 +307,17 @@ int main(){
         semafor_zablokuj(sem_id, SEM_KOLEJKA_KASA1);
         semafor_zablokuj(sem_id, SEM_KOLEJKA_KASA2);
 
-        //sprawdz dostepnosc kas
-        int kasa1_dziala = (kill(dane->kasjer1_pid, 0) == 0);
-        int kasa2_zyje = (kill(dane->kasjer2_pid, 0) == 0);
-
-        //awaryjne otwarcie kasy 2 gdy kasa 1 nie dziala
-        if (!kasa1_dziala && kasa2_zyje && !dane->kasa_otwarta[1]) {
-            dane->kasa_otwarta[1] = 1;
-            semafor_odblokuj(sem_id, SEM_DZIALANIE_KASY2);
-            printf("[SYSTEM] Awaryjne otwarcie kasy 2 - kasa 1 nie dziala!\n");
-            fflush(stdout);
-        }
-
-        int kasa2_dziala = (dane->kasa_otwarta[1] && kasa2_zyje);
-
+        //wybierz kase - kasa 1 zawsze dziala, kasa 2 zalezy od kasa_otwarta[1]
         int wybrana_kasa;
-        if(kasa1_dziala && kasa2_dziala){
+        if(dane->kasa_otwarta[1]){
+            //obie kasy otwarte - wybierz krotsza kolejke
             if(dane->kasa_kolejka[1] < dane->kasa_kolejka[0]){
                 wybrana_kasa = 2;
             }else{
                 wybrana_kasa = 1;
             }
-        } else if (kasa1_dziala){
-            wybrana_kasa = 1;
-        }else if(kasa2_dziala){
-            wybrana_kasa = 2;
         } else {
-            printf(KOLOR_KLIENT "[KLIENT %d] zadna kasa nie dziala. Zostawiam towar i wychodze\n"RESET, klientID);
-            fflush(stdout);
-            for(int j = 0; j<LICZBA_RODZAJOW; j++){
-                dane->w_koszu[j] += koszyk[j];
-                dane->sprzedano[j] -= koszyk[j]; 
-            }
-            dane->klienci_w_sklepie--;
-
-            semafor_odblokuj(sem_id, SEM_KOLEJKA_KASA2);
-            semafor_odblokuj(sem_id, SEM_KOLEJKA_KASA1);
-            semafor_odblokuj(sem_id, SEM_MUTEX_DANE);
-            semafor_odblokuj_bez_undo(sem_id, SEM_WEJSCIE_SKLEP);
-            semafor_odblokuj_bez_undo(sem_id, SEM_MAX_PROCESOW);
-            shmdt(dane);
-            exit(0);
+            wybrana_kasa = 1; //tylko kasa 1
         }
 
         //dołacz do kolejki
@@ -343,33 +336,36 @@ int main(){
         
       /* Sprawdź ewakuację przed pójściem do kasy */
 if (dane->ewakuacja) {
+    /* Zmniejsz kolejkę i wypisz - wszystko w jednej sekcji krytycznej */
+    semafor_zablokuj(sem_id, SEM_MUTEX_DANE);
+    semafor_zablokuj(sem_id, (wybrana_kasa == 1) ? SEM_KOLEJKA_KASA1 : SEM_KOLEJKA_KASA2);
     semafor_zablokuj(sem_id, SEM_OUTPUT);
-    printf(KOLOR_KLIENT"[KLIENT %d] EWAKUACJA przy kasie! Zostawiam koszyk i uciekam:\n"RESET, klientID);
     
+    printf(KOLOR_KLIENT"[KLIENT %d] EWAKUACJA przy kasie! Zostawiam koszyk:"RESET, klientID);
     int cos_mialem = 0;
     for (int j = 0; j < LICZBA_RODZAJOW; j++) {
         if (koszyk[j] > 0) {
-            printf(KOLOR_KLIENT"  - %s: %d szt.\n"RESET, NAZWA_PRODUKTOW[j], koszyk[j]);
+            printf(KOLOR_KLIENT"  - %s: %d szt."RESET, NAZWA_PRODUKTOW[j], koszyk[j]);
             cos_mialem = 1;
+            dane->w_koszu[j] += koszyk[j];
+            dane->sprzedano[j] -= koszyk[j]; 
         }
     }
+    printf("\n");
     if (!cos_mialem) {
         printf(KOLOR_KLIENT"  (koszyk byl pusty)\n"RESET);
     }
-    fflush(stdout);
-    semafor_odblokuj(sem_id, SEM_OUTPUT);
-
-    /* Zmniejsz kolejkę (bo już się zapisaliśmy) */
-    semafor_zablokuj(sem_id, SEM_MUTEX_DANE);
-    semafor_zablokuj(sem_id, (wybrana_kasa == 1) ? SEM_KOLEJKA_KASA1 : SEM_KOLEJKA_KASA2);
+    
     if (dane->kasa_kolejka[wybrana_kasa - 1] > 0) {
         dane->kasa_kolejka[wybrana_kasa - 1]--;
     }
-    for (int j = 0; j < LICZBA_RODZAJOW; j++) {
-        dane->w_koszu[j] += koszyk[j];
-        dane->sprzedano[j] -= koszyk[j]; 
-    }
     dane->klienci_w_sklepie--;
+    int zostalo = dane->klienci_w_sklepie;
+    
+    printf(KOLOR_KLIENT "[KLIENT %d] EWAKUACJA - wychodze! (zostalo klientow: %d)\n"RESET, klientID, zostalo);
+    fflush(stdout);
+    
+    semafor_odblokuj(sem_id, SEM_OUTPUT);
     semafor_odblokuj(sem_id, (wybrana_kasa == 1) ? SEM_KOLEJKA_KASA1 : SEM_KOLEJKA_KASA2);
     semafor_odblokuj(sem_id, SEM_MUTEX_DANE);
 
@@ -393,35 +389,55 @@ if (dane->ewakuacja) {
             perror("[KLIENT] Blad msgsnd dla kasy");
         }
 
-        // Czekaj na potwierdzenie od kasjera
-       
-MsgPotwierdzenie potwierdzenie;
-int proba = 0;
-while (proba < 50) {  /* Max 5 sekund (50 x 100ms) */
-    if (dane->ewakuacja) {
-        printf(KOLOR_KLIENT"[KLIENT %d] EWAKUACJA! Nie czekam na paragon, uciekam!\n"RESET, klientID);
-        fflush(stdout);
-        break;
+        // Czekaj na potwierdzenie od kasjera (blokujace msgrcv)
+        MsgPotwierdzenie potwierdzenie;
+        while(1) {
+            //sprawdz ewakuacje przed blokowaniem
+            if(dane->ewakuacja || otrzymano_sigterm) {
+                printf(KOLOR_KLIENT"[KLIENT %d] EWAKUACJA! Nie czekam na paragon, uciekam!\n"RESET, klientID);
+                fflush(stdout);
+                break;
+            }
+            
+            //probuj odebrac potwierdzenie (blokujace)
+            ssize_t wynik = msgrcv(msg_kasa_id, &potwierdzenie, sizeof(potwierdzenie) - sizeof(long), klientID, 0); //blokujace - bez IPC_NOWAIT
+            
+            if(wynik != -1) {
+                break; //otrzymano potwierdzenie
+            }
+            
+            if(errno == EINTR) {
+                //przerwane sygnalem - sprawdz czy ewakuacja
+                if(dane->ewakuacja || otrzymano_sigterm) {
+                    printf(KOLOR_KLIENT"[KLIENT %d] Sygnal ewakuacji przy kasie!\n"RESET, klientID);
+                    fflush(stdout);
+                    break;
+                }
+                continue; //inny sygnal, probuj ponownie
+            }
+            
+            //inny blad - wyjdz
+            break;
+        }
     }
-    
-    ssize_t wynik = msgrcv(msg_kasa_id, &potwierdzenie, 
-                           sizeof(potwierdzenie) - sizeof(long), 
-                           klientID, IPC_NOWAIT);
-    if (wynik != -1) {
-        break;  /* Otrzymano potwierdzenie */
-    }
-    
+
+    //wyjscie ze sklepu
     semafor_zablokuj(sem_id, SEM_MUTEX_DANE);
+    int byla_ewakuacja = dane->ewakuacja || otrzymano_sigterm;
     dane->klienci_w_sklepie--;
     int zostalo = dane->klienci_w_sklepie;
 
     semafor_zablokuj(sem_id, SEM_OUTPUT);
-    printf(KOLOR_KLIENT "[KLIENT %d] Wychodze (zostalo klientow: %d)\n"RESET, klientID, zostalo);
+    if(byla_ewakuacja) {
+        printf(KOLOR_KLIENT "[KLIENT %d] EWAKUACJA - wychodze! (zostalo klientow: %d)\n"RESET, klientID, zostalo);
+    } else {
+        printf(KOLOR_KLIENT "[KLIENT %d] Wychodze (zostalo klientow: %d)\n"RESET, klientID, zostalo);
+    }
     fflush(stdout);
     semafor_odblokuj(sem_id, SEM_OUTPUT);
 
-    //zamknij kase 2 jesli malo klientww
-    if(zostalo < PROG_DRUGIEJ_KASY && dane->kasa_otwarta[1]){
+    //zamknij kase 2 jesli malo klientow (tylko jesli nie ewakuacja)
+    if(!byla_ewakuacja && zostalo < PROG_DRUGIEJ_KASY && dane->kasa_otwarta[1]){
         dane->kasa_otwarta[1] = 0;
         printf("[SYSTEM] Zamykam kase 2,   Klientow: %d < %d\n", zostalo, PROG_DRUGIEJ_KASY);
         fflush(stdout);

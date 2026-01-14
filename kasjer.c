@@ -66,7 +66,7 @@ int main(int argc, char* argv[]){
 
         int moja_kasa_index = numer_kasy - 1; //idneks w tablicy, 0 lub 1
 
-        //sprawdz zmianę statusu kasy (otwarta/zamknięta)
+        //sprawdz zmiane statusu kasy (otwarta/zamknięta)
         int aktualny_status = dane->kasa_otwarta[moja_kasa_index];
         if(aktualny_status != poprzedni_status){
             if(aktualny_status){
@@ -98,11 +98,31 @@ int main(int argc, char* argv[]){
             break; 
         }
 
-        //Zaktualizuj liczniki kolejki
+        //zaktualizuj liczniki kolejki
         int sem_kolejka = (numer_kasy == 1) ? SEM_KOLEJKA_KASA1 : SEM_KOLEJKA_KASA2;
 
         semafor_zablokuj(sem_id, SEM_MUTEX_DANE);
         semafor_zablokuj(sem_id, sem_kolejka);
+        
+        //sprawdz ewakuacje w sekcji krytycznej - przed obsluga
+        if(dane->ewakuacja) {
+            if(dane->kasa_kolejka[moja_kasa_index] > 0){
+                dane->kasa_kolejka[moja_kasa_index]--;
+            }
+            semafor_odblokuj(sem_id, sem_kolejka);
+            semafor_odblokuj(sem_id, SEM_MUTEX_DANE);
+            
+            //wyslij potwierdzenie zeby klient nie wisial
+            MsgPotwierdzenie potwierdzenie;
+            potwierdzenie.mtype = koszyk.klient_pid;
+            potwierdzenie.obsluzony = 0;
+            msgsnd(msg_kasa_id, &potwierdzenie, sizeof(potwierdzenie) - sizeof(long), 0);
+            
+            printf(KOLOR_KASJER"[KASJER %d] Kasa %d - EWAKUACJA! Nie obsluguje klienta %d!\n"RESET, kasjerID, numer_kasy, koszyk.klient_pid);
+            fflush(stdout);
+            break;
+        }
+        
         if(dane->kasa_kolejka[moja_kasa_index] > 0){
             dane->kasa_kolejka[moja_kasa_index]--;
         }
@@ -114,6 +134,14 @@ int main(int argc, char* argv[]){
         semafor_zablokuj(sem_id, SEM_OUTPUT);
 
         printf(KOLOR_KASJER"[KASJER %d] Kasa %d, Obsluguje klienta %d\n"RESET, kasjerID, numer_kasy, koszyk.klient_pid);
+
+        //logowanie do pliku
+        FILE *log = fopen("kasjer_log.txt", "a");
+        if(log != NULL){
+            fprintf(log, "Kasa %d obsluguje klienta %d (laczna liczba obsluzonych: %d)\n", 
+                    numer_kasy, koszyk.klient_pid, dane->kasa_obsluzonych[moja_kasa_index]);
+            fclose(log);
+        }
 
         int pozycji = 0;
         for(int i = 0;i<LICZBA_RODZAJOW; i++){
@@ -127,9 +155,8 @@ int main(int argc, char* argv[]){
         printf(KOLOR_KASJER"  SUMA: %d zl (%d szt.) - Dziekujemy\n\n"RESET, koszyk.suma, pozycji);
         fflush(stdout);
         semafor_odblokuj(sem_id, SEM_OUTPUT);
-        //usleep(800000);
 
-        // Wyślij potwierdzenie do klienta
+        //wyslij potwierdzenie do klienta
         MsgPotwierdzenie potwierdzenie;
         potwierdzenie.mtype = koszyk.klient_pid;
         potwierdzenie.obsluzony = 1;

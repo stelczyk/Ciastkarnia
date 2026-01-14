@@ -11,6 +11,8 @@ static int sem_id = -1;
 static int msg_id = -1;
 static int msg_kasa_id = -1;
 
+void handler_alarm(int sig) { }
+
 
 void obsluga_inwentaryzacji(int sig){
     printf(KOLOR_KIEROWNIK"\n[KIEROWNIK] Otrzymalem sygnal INWENATRYZACJI\n"RESET);
@@ -157,6 +159,7 @@ int main(){
     signal(SIGCHLD, SIG_IGN);
     signal(SYGNAL_INWENTARYZACJA, obsluga_inwentaryzacji);
     signal(SYGNAL_EWAKUACJA, obsluga_ewakuacji);
+    signal(SIGALRM, handler_alarm);
 
 
     printf(KOLOR_KIEROWNIK"[KIEROWNIK] Otwieram ciastkarnie\n"RESET);
@@ -271,7 +274,8 @@ int main(){
     printf(KOLOR_KIEROWNIK"[KIEROWNIK] Piekarnia otwarta! Sklep otworzy sie za %d sekund\n"RESET, CZAS_PRZED_OTWARCIEM_SKLEPU);
     fflush(stdout);
 
-    sleep(CZAS_PRZED_OTWARCIEM_SKLEPU);
+    alarm(CZAS_PRZED_OTWARCIEM_SKLEPU);
+    pause();
     
     printf(KOLOR_KIEROWNIK"[KIEROWNIK] Sklep otwarty!\n"RESET);
     fflush(stdout);
@@ -321,26 +325,29 @@ int main(){
             }
             break;
         }
-        //xdusleep(10000);
+        if(dane->sklep_otwarty && !dane->zamykanie && !dane->ewakuacja){ //generuj nowego klienta jesli otwarty sklep
+            //sprawdz atomowo czy nadal mozna tworzyc klientow
+            semafor_zablokuj(sem_id, SEM_MUTEX_DANE);
+            int mozna_tworzyc = dane->sklep_otwarty && !dane->zamykanie && !dane->ewakuacja;
+            semafor_odblokuj(sem_id, SEM_MUTEX_DANE);
 
-        //sleep(losowanie(1,2));
-
-        if(dane->sklep_otwarty && !dane->zamykanie){ //generuj nowego klienta jesli otwarty sklep
-            semafor_zablokuj_bez_undo(sem_id, SEM_MAX_PROCESOW); //ogranicza liczbe procesow
-
-            if(!dane->sklep_otwarty || dane->zamykanie){
-                semafor_odblokuj_bez_undo(sem_id, SEM_MAX_PROCESOW);
-            }else{
-         
-                pid_t klient = fork();
-                if(klient == 0){
-                    execl("./klient", "klient", NULL);
-                    perror("Nie udalo sie uruchomic klienta");
-                    exit(1);
+            if(mozna_tworzyc){
+                //probuj pobrac semafor nieblokujaco
+                struct sembuf op;
+                op.sem_num = SEM_MAX_PROCESOW;
+                op.sem_op = -1;
+                op.sem_flg = IPC_NOWAIT;
+                if(semop(sem_id, &op, 1) == 0){
+                    pid_t klient = fork();
+                    if(klient == 0){
+                        execl("./klient", "klient", NULL);
+                        perror("Nie udalo sie uruchomic klienta");
+                        exit(1);
+                    }
                 }
             }
-      
         }
+        
     }
     sprzatanie(0);
     return 0;

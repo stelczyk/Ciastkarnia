@@ -64,76 +64,70 @@ int main(){
             fflush(stdout);
             break;
         }
-        //losuje rodzaj i ilosc
-        int indeks = losowanie(0,LICZBA_RODZAJOW - 1);
-        int czasPieczenia = losowanie(1,3);
-        int ilosc = losowanie(2,10);
-
-        printf(KOLOR_PIEKARZ"[PIEKARZ %d] Pieke %s (%d sztuk)\n"RESET, piekarzID, NAZWA_PRODUKTOW[indeks], ilosc);
-        fflush(stdout);
+        
+        //wybierz losowy produkt ktory ma miejsce na podajniku
+        int indeks = losowanie(0, LICZBA_RODZAJOW - 1);
+        int proby = 0;
+        
+        semafor_zablokuj(sem_id, SEM_MUTEX_DANE);
+        //szukaj produktu z wolnym miejscem (zacznij od losowego)
+        while(proby < LICZBA_RODZAJOW) {
+            int zapas = dane->na_podajniku[indeks];
+            int limit = POJEMNOSC_PODAJNIKA[indeks];
+            if(zapas < limit) {
+                break; //znaleziono produkt z miejscem
+            }
+            indeks = (indeks + 1) % LICZBA_RODZAJOW;
+            proby++;
+        }
+        semafor_odblokuj(sem_id, SEM_MUTEX_DANE);
+        
+        int ilosc = losowanie(2, 6); //troche mniej na raz, czesciej zmiana produktu
         
         //piecze kazda sztuke
-        for (int i = 0; i<ilosc; i++){
+        for (int i = 0; i < ilosc; i++){
+            //sprawdz warunki wyjscia
+            if(!dane->piekarnia_otwarta || dane->ewakuacja) break;
 
-
-            //sprawdz czy podajnik nie jest pelny
+            //sprawdz czy ten konkretny podajnik ma miejsce
             semafor_zablokuj(sem_id, SEM_MUTEX_DANE);
-            semafor_zablokuj(sem_id, SEM_PODAJNIKI);
 
             int aktualnie = dane->na_podajniku[indeks];
             int limit = POJEMNOSC_PODAJNIKA[indeks];
 
             if(aktualnie >= limit){
-                semafor_odblokuj(sem_id, SEM_PODAJNIKI);
+                //ten podajnik pelny - probuj inny produkt
                 semafor_odblokuj(sem_id, SEM_MUTEX_DANE);
-                printf(KOLOR_PIEKARZ"[PIEKARZ %d] Podajnik %s pelny (%d/%d). STOP\n"RESET, piekarzID, NAZWA_PRODUKTOW[indeks], aktualnie,limit);
-                fflush(stdout);
                 break;
             }
-            semafor_odblokuj(sem_id, SEM_PODAJNIKI);
-            semafor_odblokuj(sem_id, SEM_MUTEX_DANE);
-
 
             //przygotuj produkt do wyslania
-            if(semafor_zablokuj(sem_id, SEM_MUTEX_DANE) == -1) { perror("[PIEKARZ] sem"); break; }
-            if(semafor_zablokuj(sem_id, SEM_PODAJNIKI) == -1) { semafor_odblokuj(sem_id, SEM_MUTEX_DANE); perror("[PIEKARZ] sem"); break; }
-
             licznik_produktow++;
             MsgProdukt produkt;
             produkt.mtype = indeks + 1;
             produkt.numer_sztuki = licznik_produktow;
 
+            //wyslij produkt (nieblokujace)
             if (msgsnd(msg_id, &produkt, sizeof(produkt) - sizeof(long), IPC_NOWAIT) == -1) {
-                if(errno == EAGAIN) {
-                    licznik_produktow--;
-                    semafor_odblokuj(sem_id, SEM_PODAJNIKI);
-                    semafor_odblokuj(sem_id, SEM_MUTEX_DANE);
-                    //usleep(100000);
-                    continue;
-                } else {
-                    perror("[PIEKARZ] Blad msgsnd");
-                    semafor_odblokuj(sem_id, SEM_PODAJNIKI);
-                    semafor_odblokuj(sem_id, SEM_MUTEX_DANE);
-                    continue;
-                }
+                licznik_produktow--;
+                semafor_odblokuj(sem_id, SEM_MUTEX_DANE);
+                //kolejka pelna lub blad - przejdz do innego produktu
+                break;
             }
 
-            //aktualizuj statystyki
+            //aktualizuj statystyki - atomowo z wysylaniem
             dane->wyprodukowano[indeks]++;
             dane->na_podajniku[indeks]++;
             int ile_teraz = dane->na_podajniku[indeks];
 
-            semafor_odblokuj(sem_id, SEM_PODAJNIKI);
             semafor_odblokuj(sem_id, SEM_MUTEX_DANE);
 
             semafor_zablokuj(sem_id, SEM_OUTPUT);
-            printf(KOLOR_PIEKARZ"[PIEKARZ %d] Wyslalem %s # %d na podajnik (%d/%d)\n"RESET,
+            printf(KOLOR_PIEKARZ"[PIEKARZ %d] Wyslalem %s #%d na podajnik (%d/%d)\n"RESET,
                    piekarzID, NAZWA_PRODUKTOW[indeks], licznik_produktow, ile_teraz, POJEMNOSC_PODAJNIKA[indeks]);
             fflush(stdout);
             semafor_odblokuj(sem_id, SEM_OUTPUT);
         }
-        //usleep(100000); //xd
-        
     }
 
     printf(KOLOR_PIEKARZ"[PIEKARZ %d] Piekarnia zamknieta, koncze prace\n"RESET, piekarzID);
