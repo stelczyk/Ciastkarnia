@@ -82,7 +82,7 @@ int main(){
         }
         semafor_odblokuj(sem_id, SEM_MUTEX_DANE);
         
-        int ilosc = losowanie(2, 6); //troche mniej na raz, czesciej zmiana produktu
+        int ilosc = losowanie(30, 50); //wieksza partia, zeby zapelnic polki
         
         //piecze kazda sztuke
         for (int i = 0; i < ilosc; i++){

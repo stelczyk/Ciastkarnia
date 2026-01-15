@@ -33,9 +33,9 @@
 //PARAMETRY
 
 #define LICZBA_RODZAJOW 12 //ilosc rodzajow ciastek
-#define MAX_KLIENTOW 20 // pojemnosc sklepu
+#define MAX_KLIENTOW 1000 // pojemnosc sklepu
 #define PROG_DRUGIEJ_KASY (MAX_KLIENTOW/2) //otwieranie drugiej kasy
-#define CZAS_PRZED_OTWARCIEM_SKLEPU 5 //czas pracy piekarni przed wejsciem klientow
+#define CZAS_PRZED_OTWARCIEM_SKLEPU 2 //czas pracy piekarni przed wejsciem klientow
 #define CZAS_PRACY_SKLEPU 30 // czas pracy sklepu
 
 //KLUCZE IPC
@@ -78,7 +78,7 @@ static const char *NAZWA_PRODUKTOW[] = {
 static const int CENY[] = {3, 15, 12, 4, 6, 5, 8, 7, 3, 5, 4, 10};
 
 //POJEMNOSC KAZDEGO PODAJNIKA
-static const int POJEMNOSC_PODAJNIKA[] = {10, 17, 11, 12, 10, 15, 14, 11, 20, 15, 12, 13};
+static const int POJEMNOSC_PODAJNIKA[] = {700, 450, 870, 730, 890, 900, 1010, 870, 690, 670, 1120, 760};
 
 //PAMIEC DZIELONA
 typedef struct {
@@ -136,7 +136,7 @@ static inline int semafor_zablokuj(int sem_id, int sem_num){
     operacja.sem_flg = SEM_UNDO;
 
     while(semop(sem_id, &operacja, 1) == -1){
-        if(errno == EINTR) continue;  // retry po przerwaniu sygnałem
+        if(errno == EINTR) continue;  // retry po przerwaniu sygnaÃ…â€šem
         perror("blad semop zablokuj");
         return -1;
     }
@@ -209,7 +209,7 @@ static inline int pobierz_grupe_semaforowa(void){
 static inline int ustaw_wartosci_semaforow(int sem_id){
     if(semctl(sem_id, SEM_MUTEX_DANE, SETVAL, 1) == -1) return -1;
     if(semctl(sem_id, SEM_WEJSCIE_SKLEP, SETVAL, MAX_KLIENTOW) == -1) return -1;
-    if(semctl(sem_id, SEM_MAX_PROCESOW, SETVAL,MAX_KLIENTOW*3 ) == -1) return -1;
+    if(semctl(sem_id, SEM_MAX_PROCESOW, SETVAL,10000 ) == -1) return -1;
     if(semctl(sem_id, SEM_KOLEJKA_KASA1, SETVAL, 1) == -1) return -1;
     if(semctl(sem_id, SEM_KOLEJKA_KASA2, SETVAL, 1) == -1) return -1;
     if(semctl(sem_id, SEM_DZIALANIE_KASY1, SETVAL, 1) == -1) return -1;

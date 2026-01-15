@@ -24,13 +24,13 @@ void obsluga_inwentaryzacji(int sig){
 }
 
 void obsluga_ewakuacji(int sig){
-    printf(KOLOR_KIEROWNIK"\n[KIEROWNIK] Otrzymalem sygnal EWAKUACJI\n"RESET);
-    fflush(stdout);
-
     if(dane != NULL){
         dane->ewakuacja = 1;
+        dane->zamykanie = 1;
         dane->sklep_otwarty = 0;
     }
+    printf(KOLOR_KIEROWNIK"\n[KIEROWNIK] Otrzymalem sygnal EWAKUACJI\n"RESET);
+    fflush(stdout);
 }
 
 void generuj_raport(){
@@ -93,7 +93,7 @@ void generuj_raport(){
 }
 
 void sprzatanie(int sig) {
-    printf(KOLOR_KIEROWNIK"\n\n[KIEROWNIK] Otrzymano sygnal‚ zakonczenia\n"RESET);
+    printf(KOLOR_KIEROWNIK"\n\n[KIEROWNIK] Otrzymano sygnalÃ¢â‚¬Å¡ zakonczenia\n"RESET);
     fflush(stdout);
 
     if(dane != NULL){
@@ -282,6 +282,7 @@ int main(){
 
     time_t czas_startu = time(NULL);
     time_t czas_konca = czas_startu + CZAS_PRACY_SKLEPU;
+    int liczba_stworzonych_klientow = 0;
 
     while(1){
         time_t teraz = time(NULL);
@@ -289,32 +290,34 @@ int main(){
 
 
         if(teraz >= czas_konca || dane->ewakuacja){ //sprawdza czy czas pracy minal lub ewakuacja
+            //NAJPIERW ustaw flagi, POTEM wypisz komunikat
+            dane->zamykanie = 1;
+            dane->piekarnia_otwarta = 0;
+            
            if (dane->ewakuacja) {
                 printf(KOLOR_KIEROWNIK"\n[KIEROWNIK] EWAKUACJA! Zamykam sklep.\n"RESET); //rozne komunikaty
             } else {
-                printf(KOLOR_KIEROWNIK"\n[KIEROWNIK] Czas pracy minął! Zamykam sklep.\n"RESET);
+                printf(KOLOR_KIEROWNIK"\n[KIEROWNIK] Czas pracy minÃ„â€¦Ã…â€š! Zamykam sklep.\n"RESET);
             }
             fflush(stdout);
 
-            dane->zamykanie = 1; //flagi zamykania
-            dane->piekarnia_otwarta = 0;
             printf(KOLOR_KIEROWNIK"[KIEROWNIK] Czekam az klienci skoncza zakupy...\n"RESET);
             fflush(stdout);
 
-            int ostatnia_ilosc = -1; //czeka na wyjscie wszystkich klientow
-            while(dane->klienci_w_sklepie > 0){
-                if(dane->klienci_w_sklepie != ostatnia_ilosc){
-                    ostatnia_ilosc = dane->klienci_w_sklepie;
-                    semafor_zablokuj(sem_id, SEM_OUTPUT);
-                    printf(KOLOR_KIEROWNIK"[KIEROWNIK] Pozostalo klientow %d\n"RESET, dane->klienci_w_sklepie);
-                    fflush(stdout);     
-                    semafor_odblokuj(sem_id, SEM_OUTPUT);
-                }
+            //czeka na wyjscie wszystkich klientow
+            while(1){
+                semafor_zablokuj(sem_id, SEM_MUTEX_DANE);
+                int klientow = dane->klienci_w_sklepie;
+                semafor_odblokuj(sem_id, SEM_MUTEX_DANE);
                 
-                //usleep(100000);
+                if(klientow <= 0) break;
+                
+                //czekaj na zmiane liczby klientow przez semafor
+                semafor_zablokuj(sem_id, SEM_ILOSC_KLIENTOW);
             }
             dane->sklep_otwarty = 0;
             printf(KOLOR_KIEROWNIK"[KIEROWNIK] Wszyscy klienci wyszli, zamykam sklep\n"RESET);
+            printf(KOLOR_KIEROWNIK"[KIEROWNIK] Laczna liczba stworzonych klientow: %d\n"RESET, liczba_stworzonych_klientow);
             fflush(stdout);
             
             //generuje raport przy inwentaryzacji
@@ -344,6 +347,7 @@ int main(){
                         perror("Nie udalo sie uruchomic klienta");
                         exit(1);
                     }
+                    liczba_stworzonych_klientow++;
                 }
             }
         }

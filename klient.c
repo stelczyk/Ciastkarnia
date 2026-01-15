@@ -196,6 +196,7 @@ int main(){
             semafor_odblokuj(sem_id, SEM_OUTPUT);
             semafor_odblokuj(sem_id, SEM_MUTEX_DANE);
             
+            semafor_odblokuj(sem_id, SEM_ILOSC_KLIENTOW);
             semafor_odblokuj_bez_undo(sem_id, SEM_WEJSCIE_SKLEP);
             semafor_odblokuj_bez_undo(sem_id, SEM_MAX_PROCESOW);
             shmdt(dane);
@@ -214,7 +215,7 @@ int main(){
 
             ssize_t wynik = msgrcv(msg_id, &produkt, sizeof(produkt) - sizeof(long), i + 1, IPC_NOWAIT);
             if(wynik == -1){
-                break;
+                 break;
             }
 
             wzialem++;
@@ -275,6 +276,7 @@ int main(){
         semafor_odblokuj(sem_id, SEM_OUTPUT);
         semafor_odblokuj(sem_id, SEM_MUTEX_DANE);
         
+        semafor_odblokuj(sem_id, SEM_ILOSC_KLIENTOW);
         semafor_odblokuj_bez_undo(sem_id, SEM_WEJSCIE_SKLEP);
         semafor_odblokuj_bez_undo(sem_id, SEM_MAX_PROCESOW);
         shmdt(dane);
@@ -301,6 +303,7 @@ int main(){
     semafor_odblokuj(sem_id, SEM_OUTPUT);
 
     //obsluga przy kasie
+    int zostal_obsluzony = 0;
     if(suma > 0){
         
         semafor_zablokuj(sem_id, SEM_MUTEX_DANE);
@@ -369,6 +372,7 @@ if (dane->ewakuacja) {
     semafor_odblokuj(sem_id, (wybrana_kasa == 1) ? SEM_KOLEJKA_KASA1 : SEM_KOLEJKA_KASA2);
     semafor_odblokuj(sem_id, SEM_MUTEX_DANE);
 
+    semafor_odblokuj(sem_id, SEM_ILOSC_KLIENTOW);
     semafor_odblokuj_bez_undo(sem_id, SEM_WEJSCIE_SKLEP);
     semafor_odblokuj_bez_undo(sem_id, SEM_MAX_PROCESOW);
     shmdt(dane);
@@ -403,6 +407,7 @@ if (dane->ewakuacja) {
             ssize_t wynik = msgrcv(msg_kasa_id, &potwierdzenie, sizeof(potwierdzenie) - sizeof(long), klientID, 0); //blokujace - bez IPC_NOWAIT
             
             if(wynik != -1) {
+                zostal_obsluzony = 1; //klient dostal paragon
                 break; //otrzymano potwierdzenie
             }
             
@@ -423,7 +428,7 @@ if (dane->ewakuacja) {
 
     //wyjscie ze sklepu
     semafor_zablokuj(sem_id, SEM_MUTEX_DANE);
-    int byla_ewakuacja = dane->ewakuacja || otrzymano_sigterm;
+    int byla_ewakuacja = (dane->ewakuacja || otrzymano_sigterm) && !zostal_obsluzony;
     dane->klienci_w_sklepie--;
     int zostalo = dane->klienci_w_sklepie;
 
@@ -444,6 +449,7 @@ if (dane->ewakuacja) {
     }
 
     semafor_odblokuj(sem_id, SEM_MUTEX_DANE);
+    semafor_odblokuj(sem_id, SEM_ILOSC_KLIENTOW); //sygnalizuj kierownikowi ze klient wyszedl
     semafor_odblokuj_bez_undo(sem_id, SEM_WEJSCIE_SKLEP);
     semafor_odblokuj_bez_undo(sem_id, SEM_MAX_PROCESOW);
 
