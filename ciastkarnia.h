@@ -12,9 +12,29 @@
 #include <sys/sem.h>
 #include <sys/msg.h>
 #include <signal.h>
+#include <stdarg.h>
+
+//funkcja do logowania na ekran i do pliku
+static void print_log(const char *format, ...) {
+    va_list args;
+
+    va_start(args, format);
+    vprintf(format, args);
+    va_end(args);
+    fflush(stdout);
 
 
-#define LOG(fmt, ...) do { FILE *f = fopen("logi.txt","a"); if(f) { fprintf(f, fmt, ##__VA_ARGS__); fclose(f); } } while(0)
+    FILE *f = fopen("symulacja.txt", "a");
+    if(f) {
+        va_start(args, format);
+        vfprintf(f, format, args);
+        va_end(args);
+        fclose(f);
+    }
+}
+
+
+
 
 //KOLORY TERMINALA DLA CZYTELNOSCI
 
@@ -33,16 +53,16 @@
 //PARAMETRY
 
 #define LICZBA_RODZAJOW 12 //ilosc rodzajow ciastek
-#define MAX_KLIENTOW 1000 // pojemnosc sklepu
+#define MAX_KLIENTOW 15 // pojemnosc sklepu
 #define PROG_DRUGIEJ_KASY (MAX_KLIENTOW/2) //otwieranie drugiej kasy
 #define CZAS_PRZED_OTWARCIEM_SKLEPU 2 //czas pracy piekarni przed wejsciem klientow
 #define CZAS_PRACY_SKLEPU 30 // czas pracy sklepu
+#define MAX_NODES 2610
 
 //KLUCZE IPC
 
 #define SCIEZKA_KLUCZA "/tmp"
 #define PROJ_ID_SHM 'S' //pamiec dzielona
-#define PROJ_ID_MSG 'M' // kolejka produkty
 #define PROJ_ID_MSG_KASA 'K' // kolejka kasy
 #define PROJ_ID_SEM_GRUPA 'G' // grupa semaforowa
 
@@ -51,7 +71,7 @@
 #define SYGNAL_INWENTARYZACJA SIGUSR1 //inwentaryzacja
 #define SYGNAL_EWAKUACJA SIGUSR2 //ewakuacja
 
-#define LICZBA_SEMAFOROW 11
+#define LICZBA_SEMAFOROW 10
 
 #define SEM_MUTEX_DANE 0 //semafor do pamieci dzielonej
 #define SEM_WEJSCIE_SKLEP 1 //ogranicza liczbe osob w sklepie
@@ -63,7 +83,6 @@
 #define SEM_PODAJNIKI 7 //sekcja krytyczna piekarza
 #define SEM_OUTPUT 8 //synchronizacja wypisywania
 #define SEM_ILOSC_KLIENTOW 9
-#define SEM_PRZESTRZEN_PRODUKCJI 10 //blokuje piekarza gdy podajniki pelne
 
 struct sembuf;
 
@@ -78,9 +97,16 @@ static const char *NAZWA_PRODUKTOW[] = {
 static const int CENY[] = {3, 15, 12, 4, 6, 5, 8, 7, 3, 5, 4, 10};
 
 //POJEMNOSC KAZDEGO PODAJNIKA
-static const int POJEMNOSC_PODAJNIKA[] = {700, 450, 870, 730, 890, 900, 1010, 870, 690, 670, 1120, 760};
+static const int POJEMNOSC_PODAJNIKA[] = {70, 45, 87, 73, 89, 90, 55, 86, 57, 45, 79, 94};
 
 //PAMIEC DZIELONA
+typedef struct {
+    int type;           //rodzaj produktu (od 0 do LICZBA_RODZAJOW-1)
+    int numer_sztuki;   //unikalny numer sztuki
+    int next;           //indeks nastepnego elementu w tablicy node_pool
+} ProductNode;
+
+// PAMIEC DZIELONA
 typedef struct {
     int wyprodukowano[LICZBA_RODZAJOW]; //statystyki calkowite
     int sprzedano[LICZBA_RODZAJOW]; // statystyki sprzedazy
@@ -99,16 +125,13 @@ typedef struct {
     int kasa_kolejka[2]; //liczba klientow w kolejce
     int kasa_obsluzonych[2]; //liczba obsluzonych
 
-    //PIDY KASJEROW
-    pid_t kasjer1_pid;
-    pid_t kasjer2_pid;  
+
+    ProductNode node_pool[MAX_NODES];
+    int free_head;
+    int feeder_head[LICZBA_RODZAJOW];
+    int feeder_tail[LICZBA_RODZAJOW];
 } DaneWspolne;
 
-//KOMUNIKAT PRODUKTU
-typedef struct {
-    long mtype; //typ
-    int numer_sztuki; //numer sztuki
-} MsgProdukt;
 
 //KOMUNIKAT KOSZYKA
 typedef struct {
@@ -136,7 +159,7 @@ static inline int semafor_zablokuj(int sem_id, int sem_num){
     operacja.sem_flg = SEM_UNDO;
 
     while(semop(sem_id, &operacja, 1) == -1){
-        if(errno == EINTR) continue;  // retry po przerwaniu sygnaÃ…â€šem
+        if(errno == EINTR) continue;  //retry po przerwaniu sygnalem
         perror("blad semop zablokuj");
         return -1;
     }
@@ -209,7 +232,7 @@ static inline int pobierz_grupe_semaforowa(void){
 static inline int ustaw_wartosci_semaforow(int sem_id){
     if(semctl(sem_id, SEM_MUTEX_DANE, SETVAL, 1) == -1) return -1;
     if(semctl(sem_id, SEM_WEJSCIE_SKLEP, SETVAL, MAX_KLIENTOW) == -1) return -1;
-    if(semctl(sem_id, SEM_MAX_PROCESOW, SETVAL,10000 ) == -1) return -1;
+    if(semctl(sem_id, SEM_MAX_PROCESOW, SETVAL,30 ) == -1) return -1;
     if(semctl(sem_id, SEM_KOLEJKA_KASA1, SETVAL, 1) == -1) return -1;
     if(semctl(sem_id, SEM_KOLEJKA_KASA2, SETVAL, 1) == -1) return -1;
     if(semctl(sem_id, SEM_DZIALANIE_KASY1, SETVAL, 1) == -1) return -1;
@@ -217,12 +240,6 @@ static inline int ustaw_wartosci_semaforow(int sem_id){
     if(semctl(sem_id, SEM_PODAJNIKI, SETVAL, 1) == -1) return -1;
     if(semctl(sem_id, SEM_OUTPUT, SETVAL, 1) == -1) return -1;
     if(semctl(sem_id, SEM_ILOSC_KLIENTOW, SETVAL, 0) == -1) return -1;
-    //suma pojemnosci wszystkich podajnikow - piekarz blokuje sie gdy pelne
-    int suma_pojemnosci = 0;
-    for(int i = 0; i < LICZBA_RODZAJOW; i++) {
-        suma_pojemnosci += POJEMNOSC_PODAJNIKA[i];
-    }
-    if(semctl(sem_id, SEM_PRZESTRZEN_PRODUKCJI, SETVAL, suma_pojemnosci) == -1) return -1;
     return 0;
 }
 

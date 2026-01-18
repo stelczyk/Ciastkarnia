@@ -49,33 +49,35 @@ int main(int argc, char* argv[]){
         perror("[KASJER] Blad msgget kasa");
         exit(1);
     }
+    semafor_zablokuj(sem_id, SEM_OUTPUT);
     if(dane->kasa_otwarta[numer_kasy - 1]){
-        printf(KOLOR_KASJER"[KASJER %d] Kasa %d otwarta\n"RESET, kasjerID, numer_kasy);
+        print_log(KOLOR_KASJER"[KASJER %d] Kasa %d otwarta\n"RESET, kasjerID, numer_kasy);
     } else {
-        printf(KOLOR_KASJER"[KASJER %d] Kasa %d gotowa (czeka na otwarcie)\n"RESET, kasjerID, numer_kasy);
+        print_log(KOLOR_KASJER"[KASJER %d] Kasa %d gotowa (czeka na otwarcie)\n"RESET, kasjerID, numer_kasy);
     }
-    fflush(stdout);
+    semafor_odblokuj(sem_id, SEM_OUTPUT);
     int poprzedni_status = dane->kasa_otwarta[numer_kasy - 1];
 
     while(dane->sklep_otwarty || dane->kasa_kolejka[numer_kasy - 1] > 0){
-        //ewakuacja sprawdzana w pÄ™tli msgrcv
+        //ewakuacja sprawdzana w petli msgrcv
 
         int moja_kasa_index = numer_kasy - 1; //idneks w tablicy, 0 lub 1
 
-        //sprawdz zmiane statusu kasy (otwarta/zamkniÄ™ta)
+        //sprawdz zmiane statusu kasy (otwarta/zamknieta)
         int aktualny_status = dane->kasa_otwarta[moja_kasa_index];
         if(aktualny_status != poprzedni_status){
+            semafor_zablokuj(sem_id, SEM_OUTPUT);
             if(aktualny_status){
-                printf(KOLOR_KASJER"[KASJER %d] Kasa %d, otwieram\n"RESET, kasjerID, numer_kasy);
+                print_log(KOLOR_KASJER"[KASJER %d] Kasa %d, otwieram\n"RESET, kasjerID, numer_kasy);
                 
             }else{
-                printf(KOLOR_KASJER"[KASJER %d] Kasa %d, zamykam, obsluguje reszte kolejki: %d\n"RESET, kasjerID, numer_kasy, dane->kasa_kolejka[moja_kasa_index]);  
+                print_log(KOLOR_KASJER"[KASJER %d] Kasa %d, zamykam, obsluguje reszte kolejki: %d\n"RESET, kasjerID, numer_kasy, dane->kasa_kolejka[moja_kasa_index]);  
             }
-            fflush(stdout);
+            semafor_odblokuj(sem_id, SEM_OUTPUT);
             poprzedni_status = aktualny_status;
         }    
 
-        //jesli kasa zamkniÄ™ta i kolejka pusta, czekaj na otwarcie
+        //jesli kasa zamknieta i kolejka pusta, czekaj na otwarcie
         if(!dane->kasa_otwarta[moja_kasa_index]){
             if(dane->kasa_kolejka[moja_kasa_index] <= 0){
                 int sem_dzialanie = (numer_kasy == 1) ? SEM_DZIALANIE_KASY1 : SEM_DZIALANIE_KASY2;
@@ -114,8 +116,9 @@ int main(int argc, char* argv[]){
             potwierdzenie.obsluzony = 0;
             msgsnd(msg_kasa_id, &potwierdzenie, sizeof(potwierdzenie) - sizeof(long), 0);
             
-            printf(KOLOR_KASJER"[KASJER %d] Kasa %d - EWAKUACJA! Nie obsluguje klienta %d!\n"RESET, kasjerID, numer_kasy, koszyk.klient_pid);
-            fflush(stdout);
+            semafor_zablokuj(sem_id, SEM_OUTPUT);
+            print_log(KOLOR_KASJER"[KASJER %d] Kasa %d - EWAKUACJA! Nie obsluguje klienta %d!\n"RESET, kasjerID, numer_kasy, koszyk.klient_pid);
+            semafor_odblokuj(sem_id, SEM_OUTPUT);
             break;
         }
         
@@ -129,7 +132,7 @@ int main(int argc, char* argv[]){
         //wydrukuj paragon
         semafor_zablokuj(sem_id, SEM_OUTPUT);
 
-        printf(KOLOR_KASJER"[KASJER %d] Kasa %d, Obsluguje klienta %d\n"RESET, kasjerID, numer_kasy, koszyk.klient_pid);
+        print_log(KOLOR_KASJER"[KASJER %d] Kasa %d, Obsluguje klienta %d\n"RESET, kasjerID, numer_kasy, koszyk.klient_pid);
 
         //logowanie do pliku
         FILE *log = fopen("kasjer_log.txt", "a");
@@ -143,15 +146,14 @@ int main(int argc, char* argv[]){
         for(int i = 0;i<LICZBA_RODZAJOW; i++){
             if(koszyk.koszyk[i] > 0){
                 int wartosc = koszyk.koszyk[i] * CENY[i];
-                printf(KOLOR_KASJER"  %s x%d = %d zl\n"RESET, NAZWA_PRODUKTOW[i], koszyk.koszyk[i], wartosc);
+                print_log(KOLOR_KASJER"  %s x%d = %d zl\n"RESET, NAZWA_PRODUKTOW[i], koszyk.koszyk[i], wartosc);
                 pozycji += koszyk.koszyk[i];
             }
         }
 
         
 
-        printf(KOLOR_KASJER"  SUMA: %d zl (%d szt.) - Dziekujemy\n\n"RESET, koszyk.suma, pozycji);
-        fflush(stdout);
+        print_log(KOLOR_KASJER"  SUMA: %d zl (%d szt.) - Dziekujemy\n\n"RESET, koszyk.suma, pozycji);
         semafor_odblokuj(sem_id, SEM_OUTPUT);
 
         //wyslij potwierdzenie do klienta
@@ -162,7 +164,9 @@ int main(int argc, char* argv[]){
 
         }
 
-    printf(KOLOR_KASJER"[KASJER %d] Kasa %d zamknieta\n"RESET, kasjerID, numer_kasy);
+    semafor_zablokuj(sem_id, SEM_OUTPUT);
+    print_log(KOLOR_KASJER"[KASJER %d] Kasa %d zamknieta\n"RESET, kasjerID, numer_kasy);
+    semafor_odblokuj(sem_id, SEM_OUTPUT);
     shmdt(dane);
     return 0;
 } 
