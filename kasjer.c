@@ -114,7 +114,9 @@ int main(int argc, char* argv[]){
             MsgPotwierdzenie potwierdzenie;
             potwierdzenie.mtype = koszyk.klient_pid;
             potwierdzenie.obsluzony = 0;
-            msgsnd(msg_kasa_id, &potwierdzenie, sizeof(potwierdzenie) - sizeof(long), 0);
+            if(msgsnd(msg_kasa_id, &potwierdzenie, sizeof(potwierdzenie) - sizeof(long), 0) == -1){
+                perror("[KASJER] Blad msgsnd potwierdzenia");
+            }
             
             semafor_zablokuj(sem_id, SEM_OUTPUT);
             print_log(KOLOR_KASJER"[KASJER %d] Kasa %d - EWAKUACJA! Nie obsluguje klienta %d!\n"RESET, kasjerID, numer_kasy, koszyk.klient_pid);
@@ -160,7 +162,9 @@ int main(int argc, char* argv[]){
         MsgPotwierdzenie potwierdzenie;
         potwierdzenie.mtype = koszyk.klient_pid;
         potwierdzenie.obsluzony = 1;
-        msgsnd(msg_kasa_id, &potwierdzenie, sizeof(potwierdzenie) - sizeof(long), 0);
+        if(msgsnd(msg_kasa_id, &potwierdzenie, sizeof(potwierdzenie) - sizeof(long), 0) == -1){
+            perror("[KASJER] Blad msgsnd potwierdzenia");
+        }
 
         }
 

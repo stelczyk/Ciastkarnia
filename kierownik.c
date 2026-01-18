@@ -85,7 +85,9 @@ void generuj_raport(){
         }
     }
     
-    write(fd, bufor, len);
+    if(write(fd, bufor, len) == -1){
+        perror("[KIEROWNIK] Blad write do pliku raportu");
+    }
     close(fd);
     
     if(sem_id >= 0) {
@@ -238,6 +240,10 @@ int main(){
     }
 
     pid_t piekarz = fork();
+    if(piekarz == -1){
+        perror("[KIEROWNIK] Blad fork piekarza");
+        exit(1);
+    }
     if (piekarz == 0){
         execl("./piekarz", "piekarz", NULL);
         perror("Nie udalo sie uruchomic piekarza");
@@ -248,6 +254,10 @@ int main(){
     semafor_odblokuj(sem_id, SEM_OUTPUT);
 
     pid_t kasjer1 = fork();
+    if(kasjer1 == -1){
+        perror("[KIEROWNIK] Blad fork kasjera 1");
+        exit(1);
+    }
     if(kasjer1 == 0){
         execl("./kasjer", "kasjer", "1", NULL);
         perror("Nie udalo sie uruchomic kasjera 1");
@@ -260,6 +270,10 @@ int main(){
 
 
     pid_t kasjer2 = fork();
+    if(kasjer2 == -1){
+        perror("[KIEROWNIK] Blad fork kasjera 2");
+        exit(1);
+    }
     if(kasjer2 == 0){
         execl("./kasjer", "kasjer", "2", NULL);
         perror("Nie udalo sie uruchomic kasjera 2");
@@ -341,6 +355,10 @@ int main(){
                 op.sem_flg = IPC_NOWAIT;
                 if(semop(sem_id, &op, 1) == 0){
                     pid_t klient = fork();
+                    if(klient == -1){
+                        perror("[KIEROWNIK] Blad fork klienta");
+                        continue;
+                    }
                     if(klient == 0){
                         execl("./klient", "klient", NULL);
                         perror("Nie udalo sie uruchomic klienta");
