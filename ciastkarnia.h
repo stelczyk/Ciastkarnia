@@ -53,7 +53,7 @@ static void print_log(const char *format, ...) {
 //PARAMETRY
 
 #define LICZBA_RODZAJOW 12 //ilosc rodzajow ciastek
-#define MAX_KLIENTOW 15 // pojemnosc sklepu
+#define MAX_KLIENTOW 16 // pojemnosc sklepu
 #define PROG_DRUGIEJ_KASY (MAX_KLIENTOW/2) //otwieranie drugiej kasy
 #define CZAS_PRZED_OTWARCIEM_SKLEPU 2 //czas pracy piekarni przed wejsciem klientow
 #define CZAS_PRACY_SKLEPU 30 // czas pracy sklepu
