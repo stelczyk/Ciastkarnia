@@ -99,13 +99,25 @@ void generuj_raport(){
     }
 }
 
-void sprzatanie(int sig) {
-    print_log(KOLOR_KIEROWNIK"\n\n[KIEROWNIK] Otrzymano sygnal zakonczenia\n"RESET);
+static pid_t parent_pid = -1;
 
+void sprzatanie(int sig) {
+    if(parent_pid != -1 && getpid() != parent_pid){
+        _exit(0);
+    }
+    
     if(dane != NULL){
         dane->sklep_otwarty = 0;
         dane->piekarnia_otwarta = 0;
+        dane->zamykanie = 1;
     }
+
+    if(sig != 0) {
+        print_log(KOLOR_KIEROWNIK"\n\n[KIEROWNIK] Otrzymano sygnal zakonczenia\n"RESET);
+    } else {
+        print_log(KOLOR_KIEROWNIK"\n\n[KIEROWNIK] Procedura zamkniecia sklepu\n"RESET);
+    }
+
     print_log(KOLOR_KIEROWNIK"[KIEROWNIK] Zamykam sklep i zwalniam pracownikow...\n"RESET);
     
     signal(SIGTERM, SIG_IGN);
@@ -159,6 +171,7 @@ void sprzatanie(int sig) {
 }
 
 int main(){
+    parent_pid = getpid();
     signal(SIGINT, sprzatanie);
     signal(SIGTERM, sprzatanie); 
     signal(SIGCHLD, SIG_IGN);

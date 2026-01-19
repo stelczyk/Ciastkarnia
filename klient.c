@@ -403,7 +403,11 @@ if(dane->ewakuacja) {
             ssize_t wynik = msgrcv(msg_kasa_id, &potwierdzenie, sizeof(potwierdzenie) - sizeof(long), klientID, 0);
             
             if(wynik != -1) {
-                zostal_obsluzony = 1; //klient dostal paragon
+                if(potwierdzenie.obsluzony == 1) {
+                    zostal_obsluzony = 1; //klient dostal paragon
+                } else {
+                    //nie ustawiamy flagi zostal_obsluzony
+                }
                 break; //otrzymano potwierdzenie
             }
             
