@@ -101,8 +101,8 @@ run: all
 - **Semafory** Zestaw semaforow ktory chroni sekcje krytyczne
 - **Kolejka komunikatow** Sluzy do komunikacji miedzy kasjer - klient
 
-- **Sygnal inwentaryzacji** kill -SIGUSR1 <PID Kierownika>
-- **Sygnal ewakuacji** kill -SIGUSR2 <PID Kierownika>
+- **Sygnal inwentaryzacji** `kill -SIGUSR1 <PID Kierownika>`
+- **Sygnal ewakuacji** `kill -SIGUSR2 <PID Kierownika>`
 ### Wybor kasy klienta
 
 ```
