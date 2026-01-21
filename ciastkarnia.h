@@ -148,7 +148,7 @@ typedef struct {
 } MsgPotwierdzenie;
 
 //funkcja losujaca liczbe
-static int losowanie(int min, int max) {
+static inline int losowanie(int min, int max) {
     return min + (rand() % (max - min + 1));
 }
 

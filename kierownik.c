@@ -314,7 +314,7 @@ int main(){
 
     while(1){
         time_t teraz = time(NULL);
-        int pozostalo = (int)(czas_konca - teraz);
+
 
 
         if(teraz >= czas_konca || dane->ewakuacja){ //sprawdza czy czas pracy minal lub ewakuacja
