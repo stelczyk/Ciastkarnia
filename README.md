@@ -417,43 +417,42 @@ Sprawdzenie, czy ewakuacja zatrzymuje wszystkie operacje
 
 ---
 
-## Linki do istotnych fragmentow kodu
+**a. Tworzenie i obsługa plików**
+- open(): [kierownik.c#L37](https://github.com/stelczyk/Ciastkarnia/blob/main/kierownik.c#L37)
+- write(): [kierownik.c#L88](https://github.com/stelczyk/Ciastkarnia/blob/main/kierownik.c#L88)
+- close(): [kierownik.c#L91](https://github.com/stelczyk/Ciastkarnia/blob/main/kierownik.c#L91)
+
+**b. Tworzenie procesów**
+- fork(): [kierownik.c#L255](https://github.com/stelczyk/Ciastkarnia/blob/main/kierownik.c#L255)
+- execl(): [kierownik.c#L261](https://github.com/stelczyk/Ciastkarnia/blob/main/kierownik.c#L261)
+- exit(): [klient.c#L23](https://github.com/stelczyk/Ciastkarnia/blob/main/klient.c#L23)
+- _exit(): [kierownik.c#L106](https://github.com/stelczyk/Ciastkarnia/blob/main/kierownik.c#L106)
+- wait(): [kierownik.c#L126](https://github.com/stelczyk/Ciastkarnia/blob/main/kierownik.c#L126)
 
 
-### a. Tworzenie i obsluga plikow
-- **open()**: [kierownik.c:37](https://github.com/stelczyk/Ciastkarnia/blob/595dfb67bda80ead78de2831b753c2e2b965b0a5/kierownik.c#L37)  
-- **write()**: [kierownik.c:88](https://github.com/stelczyk/Ciastkarnia/blob/595dfb67bda80ead78de2831b753c2e2b965b0a5/kierownik.c#L88) 
-- **close()**: [kierownik.c:91](https://github.com/stelczyk/Ciastkarnia/blob/595dfb67bda80ead78de2831b753c2e2b965b0a5/kierownik.c#L91)  
+**d. Obsługa sygnałów**
+- kill(): [kierownik.c#L31](https://github.com/stelczyk/Ciastkarnia/blob/main/kierownik.c#L31)
+- signal(): [klient.c#L14](https://github.com/stelczyk/Ciastkarnia/blob/main/klient.c#L14)
+
+**e. Synchronizacja procesów (wątków)**
+- ftok(): [kierownik.c#L191](https://github.com/stelczyk/Ciastkarnia/blob/main/kierownik.c#L191)
+- semget(): [ciastkarnia.h#L223](https://github.com/stelczyk/Ciastkarnia/blob/main/ciastkarnia.h#L223)
+- semctl(): [kierownik.c#L163](https://github.com/stelczyk/Ciastkarnia/blob/main/kierownik.c#L163)
+- semop(): [kierownik.c#L369](https://github.com/stelczyk/Ciastkarnia/blob/main/kierownik.c#L369)
 
 
-### b. Tworzenie procesow
-- **fork()**: [kierownik.c:242](https://github.com/stelczyk/Ciastkarnia/blob/595dfb67bda80ead78de2831b753c2e2b965b0a5/kierownik.c#L242)  
-- **exec() (execl)**: [kierownik.c:248](https://github.com/stelczyk/Ciastkarnia/blob/595dfb67bda80ead78de2831b753c2e2b965b0a5/kierownik.c#L248)
-- **exit()**: [kierownik.c:158](https://github.com/stelczyk/Ciastkarnia/blob/595dfb67bda80ead78de2831b753c2e2b965b0a5/kierownik.c#L158)  
-- **wait()**: [kierownik.c:114](https://github.com/stelczyk/Ciastkarnia/blob/595dfb67bda80ead78de2831b753c2e2b965b0a5/kierownik.c#L114)  
+**g. Segmenty pamięci dzielonej**
+- shmget(): [klient.c#L26](https://github.com/stelczyk/Ciastkarnia/blob/main/klient.c#L26)
+- shmat(): [klient.c#L32](https://github.com/stelczyk/Ciastkarnia/blob/main/klient.c#L32)
+- shmdt(): [klient.c#L88](https://github.com/stelczyk/Ciastkarnia/blob/main/klient.c#L88)
+- shmctl(): [kierownik.c#L148](https://github.com/stelczyk/Ciastkarnia/blob/main/kierownik.c#L148)
+
+**h. Kolejki komunikatów**
+- msgget(): [klient.c#L53](https://github.com/stelczyk/Ciastkarnia/blob/main/klient.c#L53)
+- msgsnd(): [klient.c#L387](https://github.com/stelczyk/Ciastkarnia/blob/main/klient.c#L387)
+- msgrcv(): [kasjer.c#L92](https://github.com/stelczyk/Ciastkarnia/blob/main/kasjer.c#L92)
+- msgctl(): [kierownik.c#L156](https://github.com/stelczyk/Ciastkarnia/blob/main/kierownik.c#L156)
 
 
-### d. Obsluga sygnalow
-- **kill()**: [kierownik.c:31](https://github.com/stelczyk/Ciastkarnia/blob/595dfb67bda80ead78de2831b753c2e2b965b0a5/kierownik.c#L31) 
-- **signal()**: [kierownik.c:162](https://github.com/stelczyk/Ciastkarnia/blob/595dfb67bda80ead78de2831b753c2e2b965b0a5/kierownik.c#L162) 
 
-
-### e. Synchronizacja procesow
-- **ftok()**: [kierownik.c:178](https://github.com/stelczyk/Ciastkarnia/blob/595dfb67bda80ead78de2831b753c2e2b965b0a5/kierownik.c#L178) 
-- **semget()**: [ciastkarnia.h:223](https://github.com/stelczyk/Ciastkarnia/blob/595dfb67bda80ead78de2831b753c2e2b965b0a5/ciastkarnia.h#L223) 
-- **semctl()**: [kierownik.c:151](https://github.com/stelczyk/Ciastkarnia/blob/595dfb67bda80ead78de2831b753c2e2b965b0a5/kierownik.c#L151) 
-- **semop()**: [ciastkarnia.h:161](https://github.com/stelczyk/Ciastkarnia/blob/595dfb67bda80ead78de2831b753c2e2b965b0a5/ciastkarnia.h#L161) 
-
-
-### g. Segmenty pamieci dzielonej
-- **shmget()**: [kierownik.c:184](https://github.com/stelczyk/Ciastkarnia/blob/595dfb67bda80ead78de2831b753c2e2b965b0a5/kierownik.c#L184) 
-- **shmat()**: [kierownik.c:190](https://github.com/stelczyk/Ciastkarnia/blob/595dfb67bda80ead78de2831b753c2e2b965b0a5/kierownik.c#L190) 
-- **shmdt()**: [kierownik.c:129](https://github.com/stelczyk/Ciastkarnia/blob/595dfb67bda80ead78de2831b753c2e2b965b0a5/kierownik.c#L129) 
-- **shmctl()**: [kierownik.c:136](https://github.com/stelczyk/Ciastkarnia/blob/595dfb67bda80ead78de2831b753c2e2b965b0a5/kierownik.c#L136) 
-
-### h. Kolejki komunikatow
-- **msgget()**: [kierownik.c:237](https://github.com/stelczyk/Ciastkarnia/blob/595dfb67bda80ead78de2831b753c2e2b965b0a5/kierownik.c#L237) 
-- **msgsnd()**: [klient.c:387](https://github.com/stelczyk/Ciastkarnia/blob/595dfb67bda80ead78de2831b753c2e2b965b0a5/klient.c#L387) 
-- **msgrcv()**: [kasjer.c:92](https://github.com/stelczyk/Ciastkarnia/blob/595dfb67bda80ead78de2831b753c2e2b965b0a5/kasjer.c#L92)  
-- **msgctl()**: [kierownik.c:144](https://github.com/stelczyk/Ciastkarnia/blob/595dfb67bda80ead78de2831b753c2e2b965b0a5/kierownik.c#L144) 
-
+---
