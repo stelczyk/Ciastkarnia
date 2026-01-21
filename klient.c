@@ -131,7 +131,7 @@ int main(){
 
     //wyswietl liste zakupow
     semafor_zablokuj(sem_id, SEM_OUTPUT);
-    print_log(KOLOR_KLIENT "[KLIENT %d] Chce kupic:\n"RESET, klientID);
+    print_log(KOLOR_KLIENT "[KLIENT %d] Chce kupic: "RESET, klientID);
     for(int i = 0; i < LICZBA_RODZAJOW; i++){
         if(listaZakupow[i] > 0){
             print_log(KOLOR_KLIENT"  - %s: %d szt."RESET, NAZWA_PRODUKTOW[i], listaZakupow[i]);
