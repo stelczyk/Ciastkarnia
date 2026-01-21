@@ -101,6 +101,8 @@ run: all
 - **Semafory** Zestaw semaforow ktory chroni sekcje krytyczne
 - **Kolejka komunikatow** Sluzy do komunikacji miedzy kasjer - klient
 
+- **Sygnal inwentaryzacji** kill -SIGUSR1 <PID Kierownika>
+- **Sygnal ewakuacji** kill -SIGUSR2 <PID Kierownika>
 ### Wybor kasy klienta
 
 ```
@@ -184,8 +186,6 @@ Sprawdzenie, czy system wytrzymuje duza liczbe klientow probujacych wejsc do skl
 ```c
 #define MAX_KLIENTOW 1000 
 ```
-### Oczekiwany rezultat
-- System nie ulega awarii, , semafor `SEM_WEJSCIE_SKLEP` poprawnie limituje liczbe klientow w sklepie do MAX_KLIENTOW
 
 ### Rezultat
 **Zaliczony**
@@ -202,9 +202,6 @@ Sprawdzenie, czy system wytrzymuje duza liczbe klientow probujacych wejsc do skl
 
 ### Cel
 Sprawdzenie, czy druga kasa sie otwiera i zamyka automatycznie przy odpowiedniej liczbie klientow.
-
-### Oczekiwany rezultat
-- Kasa 1 jest otwarta od poczatku, gdy liczba klientow w sklepie przekroczy PROG_DRUGIEJ_KASY, kasa 2 powinna sie otworzyc
 
 ### Rezultat
 
